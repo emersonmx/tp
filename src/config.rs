@@ -21,21 +21,24 @@ pub struct Session {
     name: String,
     #[serde(default = "default_directory")]
     directory: PathBuf,
-    // windows: Option<Vec<Window>>,
+    #[serde(default)]
+    windows: Vec<Window>,
 }
 
-// #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-// pub struct Window {
-//     name: Option<String>,
-//     directory: Option<PathBuf>,
-//     panes: Vec<Pane>,
-// }
-//
-// #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-// pub struct Pane {
-//     focus: bool,
-//     command: Vec<String>,
-// }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Window {
+    name: Option<String>,
+    #[serde(default)]
+    panes: Vec<Pane>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Pane {
+    #[serde(default)]
+    focus: bool,
+    #[serde(default)]
+    command: Vec<String>,
+}
 
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {
