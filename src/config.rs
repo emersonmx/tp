@@ -1,9 +1,79 @@
-use std::{env, path::PathBuf};
+use std::{
+    env, fs, io,
+    path::{Path, PathBuf},
+};
+use thiserror::Error;
 
-pub fn project_dir() -> Option<PathBuf> {
-    match env::var("HOME") {
-        Ok(e) => Some(PathBuf::from(e).join(".config/tp")),
-        Err(_) => None,
+use serde::{Deserialize, Serialize};
+
+#[derive(Error, PartialEq, Debug)]
+pub enum Error {
+    #[error("unable to load: {0}")]
+    UnableToLoad(String),
+    #[error("parser error: {0}")]
+    UnableToParseConfig(String),
+    #[error("invalid sessino directory")]
+    InvalidSessionDirectory,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Session {
+    name: String,
+    #[serde(default = "default_directory")]
+    directory: PathBuf,
+    // windows: Option<Vec<Window>>,
+}
+
+// #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+// pub struct Window {
+//     name: Option<String>,
+//     directory: Option<PathBuf>,
+//     panes: Vec<Pane>,
+// }
+//
+// #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+// pub struct Pane {
+//     focus: bool,
+//     command: Vec<String>,
+// }
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Self {
+        Error::UnableToLoad(err.to_string())
+    }
+}
+
+impl From<serde_yaml::Error> for Error {
+    fn from(err: serde_yaml::Error) -> Self {
+        Error::UnableToParseConfig(err.to_string())
+    }
+}
+
+fn default_directory() -> PathBuf {
+    Path::new(".").to_path_buf()
+}
+
+pub fn load_session(name: impl Into<String>) -> Result<Session, Error> {
+    let name = name.into();
+    let dir = sessions_dir().ok_or(Error::InvalidSessionDirectory)?;
+    let session_path = dir.join(format!("{}.yaml", name)).canonicalize()?;
+    let content = fs::read_to_string(session_path)?;
+    let session = from_content(content)?;
+    Ok(session)
+}
+
+fn from_content(content: impl Into<String>) -> Result<Session, Error> {
+    let session = serde_yaml::from_str(&content.into())?;
+    Ok(session)
+}
+
+fn sessions_dir() -> Option<PathBuf> {
+    match env::var("TP_SESSIONS_DIR") {
+        Ok(d) => Some(PathBuf::from(d)),
+        Err(_) => match env::var("HOME") {
+            Ok(e) => Some(PathBuf::from(e).join(".config/tp")),
+            Err(_) => None,
+        },
     }
 }
 
@@ -12,20 +82,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn get_project_dir() {
-        let tp_home = "/home/tp";
-        unsafe { env::set_var("HOME", tp_home) };
+    fn read_simple_session_file() {
+        let content = r#"
+        name: simple-test
+        "#;
 
-        assert_eq!(
-            project_dir(),
-            Some(PathBuf::from(format!("{tp_home}/.config/tp")))
-        );
+        let session = from_content(content).unwrap();
+
+        assert_eq!(session.name, "simple-test");
+        assert_eq!(session.directory, Path::new("."));
     }
 
     #[test]
-    fn error_when_invalid_home_dir() {
-        unsafe { env::remove_var("HOME") };
+    fn read_incorrect_session_file() {
+        let content = r#"
+        parser error
+        "#;
 
-        assert_eq!(project_dir(), None);
+        let result = from_content(content);
+
+        assert_eq!(
+            result,
+            Err(Error::UnableToParseConfig(
+                "invalid type: string \"parser error\", expected struct Session at line 2 column 9"
+                    .to_string()
+            ))
+        );
     }
 }
