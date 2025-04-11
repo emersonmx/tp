@@ -1,9 +1,9 @@
+mod cli;
+
 use anyhow::Result;
 use clap::Parser;
 use cli::Cli;
 use tp::{config, muxer};
-
-mod cli;
 
 fn main() -> Result<()> {
     match Cli::parse() {
