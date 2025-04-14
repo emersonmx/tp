@@ -18,26 +18,26 @@ pub enum Error {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Session {
-    name: String,
+    pub name: String,
     #[serde(default = "default_directory")]
-    directory: PathBuf,
+    pub directory: PathBuf,
     #[serde(default)]
-    windows: Vec<Window>,
+    pub windows: Vec<Window>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Window {
-    name: Option<String>,
+    pub name: Option<String>,
     #[serde(default)]
-    panes: Vec<Pane>,
+    pub panes: Vec<Pane>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Pane {
     #[serde(default)]
-    focus: bool,
+    pub focus: bool,
     #[serde(default)]
-    command: Vec<String>,
+    pub command: Vec<String>,
 }
 
 impl From<io::Error> for Error {
@@ -86,9 +86,7 @@ mod tests {
 
     #[test]
     fn read_simple_session_file() {
-        let content = r#"
-        name: simple-test
-        "#;
+        let content = r#"name: simple-test"#;
 
         let session = from_content(content).unwrap();
 
@@ -98,17 +96,14 @@ mod tests {
 
     #[test]
     fn read_incorrect_session_file() {
-        let content = r#"
-        parser error
-        "#;
+        let content = "parser error";
 
         let result = from_content(content);
 
         assert_eq!(
             result,
             Err(Error::UnableToParseConfig(
-                "invalid type: string \"parser error\", expected struct Session at line 2 column 9"
-                    .to_string()
+                "invalid type: string \"parser error\", expected struct Session".to_string()
             ))
         );
     }
