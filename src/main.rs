@@ -23,6 +23,6 @@ fn new_session(name: impl Into<String>) -> Result<()> {
 }
 
 fn load_session(session: config::Session) -> Result<()> {
-    muxer::apply(session)?;
+    // muxer::apply(session)?;
     Ok(())
 }
