@@ -1,6 +1,7 @@
 use std::{
     env, fs, io,
     path::{Path, PathBuf},
+    vec,
 };
 use thiserror::Error;
 
@@ -21,14 +22,14 @@ pub struct Session {
     pub name: String,
     #[serde(default = "default_directory")]
     pub directory: PathBuf,
-    #[serde(default)]
+    #[serde(default = "default_windows")]
     pub windows: Vec<Window>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Window {
     pub name: Option<String>,
-    #[serde(default)]
+    #[serde(default = "default_panes")]
     pub panes: Vec<Pane>,
 }
 
@@ -37,7 +38,7 @@ pub struct Pane {
     #[serde(default)]
     pub focus: bool,
     #[serde(default)]
-    pub command: Vec<String>,
+    pub command: String,
 }
 
 impl From<io::Error> for Error {
@@ -54,6 +55,20 @@ impl From<serde_yaml::Error> for Error {
 
 fn default_directory() -> PathBuf {
     Path::new(".").to_path_buf()
+}
+
+fn default_windows() -> Vec<Window> {
+    vec![Window {
+        name: None,
+        panes: default_panes(),
+    }]
+}
+
+fn default_panes() -> Vec<Pane> {
+    vec![Pane {
+        focus: false,
+        command: String::new(),
+    }]
 }
 
 pub fn load_session(name: impl Into<String>) -> Result<Session, Error> {
@@ -86,7 +101,7 @@ mod tests {
 
     #[test]
     fn read_simple_session_file() {
-        let content = r#"name: simple-test"#;
+        let content = "name: simple-test";
 
         let session = from_content(content).unwrap();
 
@@ -106,5 +121,35 @@ mod tests {
                 "invalid type: string \"parser error\", expected struct Session".to_string()
             ))
         );
+    }
+
+    #[test]
+    fn session_must_have_at_least_one_window_with_one_pane() {
+        let content = "name: simple-test";
+
+        let session = from_content(content).unwrap();
+
+        assert_eq!(session.windows.len(), 1);
+        assert_eq!(session.windows[0].panes.len(), 1);
+        assert_eq!(session.windows[0].name, None);
+        assert!(!session.windows[0].panes[0].focus);
+        assert_eq!(session.windows[0].panes[0].command, String::new());
+    }
+
+    #[test]
+    fn window_must_have_at_least_one_pane() {
+        let content = "
+        name: simple-test
+        windows:
+          -
+        ";
+
+        let session = from_content(content).unwrap();
+
+        assert_eq!(session.windows.len(), 1);
+        assert_eq!(session.windows[0].panes.len(), 1);
+        assert_eq!(session.windows[0].name, None);
+        assert!(!session.windows[0].panes[0].focus);
+        assert_eq!(session.windows[0].panes[0].command, String::new());
     }
 }
