@@ -76,12 +76,7 @@ pub fn load_session(name: impl Into<String>) -> Result<Session, Error> {
     let dir = sessions_dir().ok_or(Error::InvalidSessionDirectory)?;
     let session_path = dir.join(format!("{}.yaml", name)).canonicalize()?;
     let content = fs::read_to_string(session_path)?;
-    let session = from_content(content)?;
-    Ok(session)
-}
-
-fn from_content(content: impl Into<String>) -> Result<Session, Error> {
-    let session = serde_yaml::from_str(&content.into())?;
+    let session = serde_yaml::from_str(&content)?;
     Ok(session)
 }
 
@@ -102,8 +97,7 @@ mod tests {
     #[test]
     fn read_simple_session_file() {
         let content = "name: simple-test";
-
-        let session = from_content(content).unwrap();
+        let session: Session = serde_yaml::from_str(content).unwrap();
 
         assert_eq!(session.name, "simple-test");
         assert_eq!(session.directory, Path::new("."));
@@ -112,11 +106,11 @@ mod tests {
     #[test]
     fn read_incorrect_session_file() {
         let content = "parser error";
-
-        let result = from_content(content);
+        let session: Result<Session, Error> =
+            serde_yaml::from_str(content).map_err(|e| Error::UnableToParseConfig(e.to_string()));
 
         assert_eq!(
-            result,
+            session,
             Err(Error::UnableToParseConfig(
                 "invalid type: string \"parser error\", expected struct Session".to_string()
             ))
@@ -126,8 +120,7 @@ mod tests {
     #[test]
     fn session_must_have_at_least_one_window_with_one_pane() {
         let content = "name: simple-test";
-
-        let session = from_content(content).unwrap();
+        let session: Session = serde_yaml::from_str(content).unwrap();
 
         assert_eq!(session.windows.len(), 1);
         assert_eq!(session.windows[0].panes.len(), 1);
@@ -143,8 +136,7 @@ mod tests {
         windows:
           -
         ";
-
-        let session = from_content(content).unwrap();
+        let session: Session = serde_yaml::from_str(content).unwrap();
 
         assert_eq!(session.windows.len(), 1);
         assert_eq!(session.windows[0].panes.len(), 1);
