@@ -111,20 +111,20 @@ mod tests {
     mock! {
         Client {}
         impl Client for Client {
-            fn get_option(&mut self, name: OptionName) -> Result<OptionValue, crate::tmux_client::Error>;
-            fn set_option(&mut self, name: OptionName, value: OptionValue);
+            fn get_option(&mut self, option_name: OptionName) -> Result<OptionValue, crate::tmux_client::Error>;
+            fn set_option(&mut self, option_name: OptionName, option_value: OptionValue);
 
-            fn new_session(&mut self, name: &SessionName);
-            fn switch_to_session(&mut self, name: &SessionName);
-            fn has_session(&mut self, name: &SessionName) -> bool;
+            fn new_session(&mut self, session_name: &SessionName);
+            fn switch_to_session(&mut self, session_name: &SessionName);
+            fn has_session(&mut self, session_name: &SessionName) -> bool;
 
-            fn new_window(&mut self, name: &SessionName);
-            fn rename_window(&mut self, id: WindowID, name: WindowName);
+            fn new_window(&mut self, session_name: &SessionName);
+            fn rename_window(&mut self, window_id: WindowID, window_name: WindowName);
 
             fn new_pane(&mut self);
-            fn select_pane(&mut self, id: PaneID);
+            fn select_pane(&mut self, pane_id: PaneID);
 
-            fn send_keys(&mut self, keys: Keys);
+            fn send_keys(&mut self, pane_id: PaneID, keys: Keys);
 
             fn use_layout(&mut self, layout: Layout);
         }

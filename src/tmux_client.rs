@@ -93,20 +93,20 @@ pub enum Error {
 }
 
 pub trait Client {
-    fn get_option(&mut self, name: OptionName) -> Result<OptionValue, Error>;
-    fn set_option(&mut self, name: OptionName, value: OptionValue);
+    fn get_option(&mut self, option_name: OptionName) -> Result<OptionValue, Error>;
+    fn set_option(&mut self, option_name: OptionName, option_value: OptionValue);
 
-    fn new_session(&mut self, name: &SessionName);
-    fn switch_to_session(&mut self, name: &SessionName);
-    fn has_session(&mut self, name: &SessionName) -> bool;
+    fn new_session(&mut self, session_name: &SessionName);
+    fn switch_to_session(&mut self, session_name: &SessionName);
+    fn has_session(&mut self, session_name: &SessionName) -> bool;
 
-    fn new_window(&mut self, name: &SessionName);
-    fn rename_window(&mut self, id: WindowID, name: WindowName);
+    fn new_window(&mut self, session_name: &SessionName);
+    fn rename_window(&mut self, window_id: WindowID, window_name: WindowName);
 
     fn new_pane(&mut self);
-    fn select_pane(&mut self, id: PaneID);
+    fn select_pane(&mut self, pane_id: PaneID);
 
-    fn send_keys(&mut self, keys: Keys);
+    fn send_keys(&mut self, pane_id: PaneID, keys: Keys);
 
     fn use_layout(&mut self, layout: Layout);
 }
@@ -115,9 +115,9 @@ pub trait Client {
 pub struct TmuxClient;
 
 impl Client for TmuxClient {
-    fn get_option(&mut self, name: OptionName) -> Result<OptionValue, Error> {
+    fn get_option(&mut self, option_name: OptionName) -> Result<OptionValue, Error> {
         let output = Command::new("tmux")
-            .args(["show-options", "-gv", &name.value()])
+            .args(["show-options", "-gv", &option_name.value()])
             .stderr(Stdio::null())
             .output()
             .map_err(|e| Error::OptionNotFound(e.to_string()))?;
@@ -128,30 +128,30 @@ impl Client for TmuxClient {
         Ok(OptionValue::new(value))
     }
 
-    fn set_option(&mut self, name: OptionName, value: OptionValue) {
-        let (_, _) = (name, value);
+    fn set_option(&mut self, option_name: OptionName, option_value: OptionValue) {
+        let (_, _) = (option_name, option_value);
         todo!()
     }
 
-    fn new_session(&mut self, name: &SessionName) {
+    fn new_session(&mut self, session_name: &SessionName) {
         let _ = Command::new("tmux")
-            .args(["new-session", "-d", "-s", &name.value()])
+            .args(["new-session", "-d", "-s", &session_name.value()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
     }
 
-    fn switch_to_session(&mut self, name: &SessionName) {
+    fn switch_to_session(&mut self, session_name: &SessionName) {
         let _ = Command::new("tmux")
-            .args(["switch-client", "-t", &name.value()])
+            .args(["switch-client", "-t", &session_name.value()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
     }
 
-    fn has_session(&mut self, name: &SessionName) -> bool {
+    fn has_session(&mut self, session_name: &SessionName) -> bool {
         let output = Command::new("tmux")
-            .args(["has-session", "-t", &name.value()])
+            .args(["has-session", "-t", &session_name.value()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status();
@@ -162,17 +162,22 @@ impl Client for TmuxClient {
         }
     }
 
-    fn new_window(&mut self, name: &SessionName) {
+    fn new_window(&mut self, session_name: &SessionName) {
         let _ = Command::new("tmux")
-            .args(["new-window", "-t", &name.value()])
+            .args(["new-window", "-t", &session_name.value()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
     }
 
-    fn rename_window(&mut self, id: WindowID, name: WindowName) {
+    fn rename_window(&mut self, window_id: WindowID, window_name: WindowName) {
         let _ = Command::new("tmux")
-            .args(["rename-window", "-t", &id.value(), &name.value()])
+            .args([
+                "rename-window",
+                "-t",
+                &window_id.value(),
+                &window_name.value(),
+            ])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
@@ -182,8 +187,8 @@ impl Client for TmuxClient {
         todo!()
     }
 
-    fn select_pane(&mut self, id: PaneID) {
-        let window_id = id.0.clone();
+    fn select_pane(&mut self, pane_id: PaneID) {
+        let window_id = pane_id.0.clone();
         let _ = Command::new("tmux")
             .args(["select-window", "-t", &window_id.value()])
             .stdout(Stdio::null())
@@ -191,14 +196,14 @@ impl Client for TmuxClient {
             .output();
 
         let _ = Command::new("tmux")
-            .args(["select-pane", "-t", &id.value()])
+            .args(["select-pane", "-t", &pane_id.value()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
     }
 
-    fn send_keys(&mut self, keys: Keys) {
-        let _ = keys;
+    fn send_keys(&mut self, pane_id: PaneID, keys: Keys) {
+        let (_, _) = (pane_id, keys);
         todo!()
     }
 
