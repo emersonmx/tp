@@ -44,6 +44,16 @@ impl WindowName {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PaneID(WindowID, String);
 
+impl PaneID {
+    pub fn new(window: &WindowID, name: impl Into<String>) -> Self {
+        Self(window.clone(), name.into())
+    }
+
+    pub fn value(&self) -> String {
+        format!("{}.{}", self.0.value(), self.1)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct OptionName(String);
 
@@ -173,8 +183,18 @@ impl Client for TmuxClient {
     }
 
     fn select_pane(&mut self, id: PaneID) {
-        let _ = id;
-        todo!()
+        let window_id = id.0.clone();
+        let _ = Command::new("tmux")
+            .args(["select-window", "-t", &window_id.value()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .output();
+
+        let _ = Command::new("tmux")
+            .args(["select-pane", "-t", &id.value()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .output();
     }
 
     fn send_keys(&mut self, keys: Keys) {

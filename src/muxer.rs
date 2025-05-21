@@ -1,6 +1,6 @@
 use crate::{
     config::Session,
-    tmux_client::{Client, OptionName, SessionName, WindowID, WindowName},
+    tmux_client::{Client, OptionName, PaneID, SessionName, WindowID, WindowName},
 };
 use thiserror::Error;
 
@@ -46,7 +46,9 @@ impl<C: Client> Muxer<C> {
         self.setup_base_ids()?;
         self.client.new_session(&session_name);
 
+        let mut focus_pane: Option<PaneID> = None;
         for (widx, window) in session.windows.iter().enumerate() {
+            let window_id = WindowID::new(&session_name, (self.base_window_id + widx).to_string());
             println!("{widx} - {window:?}");
             if widx > 0 {
                 self.client.new_window(&session_name);
@@ -54,13 +56,23 @@ impl<C: Client> Muxer<C> {
 
             let window_name = window.name.clone().unwrap_or("".to_string());
             if !window_name.is_empty() {
-                self.client.rename_window(
-                    WindowID::new(&session_name, (self.base_window_id + widx).to_string()),
-                    WindowName::new(window_name),
-                );
+                self.client
+                    .rename_window(window_id.clone(), WindowName::new(window_name));
+            }
+
+            for (pidx, pane) in window.panes.iter().enumerate() {
+                let pane_id = PaneID::new(&window_id, (self.base_pane_id + pidx).to_string());
+                println!("{pidx} - {pane:?}");
+                if pane.focus {
+                    focus_pane = Some(pane_id);
+                }
             }
         }
         windows.push((self.base_window_id, vec![self.base_pane_id]));
+
+        if let Some(pane) = focus_pane {
+            self.client.select_pane(pane);
+        }
 
         self.client.switch_to_session(&session_name);
 
