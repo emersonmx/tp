@@ -49,7 +49,6 @@ impl<C: Client> Muxer<C> {
         let mut focus_pane: Option<PaneID> = None;
         for (widx, window) in session.windows.iter().enumerate() {
             let window_id = WindowID::new(&session_name, (self.base_window_id + widx).to_string());
-            println!("{widx} - {window:?}");
             if widx > 0 {
                 self.client.new_window(&session_name);
             }
@@ -62,12 +61,14 @@ impl<C: Client> Muxer<C> {
 
             for (pidx, pane) in window.panes.iter().enumerate() {
                 let pane_id = PaneID::new(&window_id, (self.base_pane_id + pidx).to_string());
-                println!("{pidx} - {pane:?}");
                 if pane.focus {
                     focus_pane = Some(pane_id.clone());
                 }
 
-                println!("{}", pane.command);
+                if pidx > 0 {
+                    self.client.new_pane(window_id.clone());
+                }
+
                 self.client
                     .send_keys(pane_id.clone(), Keys::new(&pane.command));
             }
@@ -125,7 +126,7 @@ mod tests {
             fn new_window(&mut self, session_name: &SessionName);
             fn rename_window(&mut self, window_id: WindowID, window_name: WindowName);
 
-            fn new_pane(&mut self);
+            fn new_pane(&mut self, window_id: WindowID);
             fn select_pane(&mut self, pane_id: PaneID);
 
             fn send_keys(&mut self, pane_id: PaneID, keys: Keys);

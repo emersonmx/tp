@@ -113,7 +113,7 @@ pub trait Client {
     fn new_window(&mut self, session_name: &SessionName);
     fn rename_window(&mut self, window_id: WindowID, window_name: WindowName);
 
-    fn new_pane(&mut self);
+    fn new_pane(&mut self, window_id: WindowID);
     fn select_pane(&mut self, pane_id: PaneID);
 
     fn send_keys(&mut self, pane_id: PaneID, keys: Keys);
@@ -193,8 +193,12 @@ impl Client for TmuxClient {
             .output();
     }
 
-    fn new_pane(&mut self) {
-        todo!()
+    fn new_pane(&mut self, window_id: WindowID) {
+        let _ = Command::new("tmux")
+            .args(["split-window", "-t", &window_id.value()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .output();
     }
 
     fn select_pane(&mut self, pane_id: PaneID) {
