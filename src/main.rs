@@ -3,7 +3,7 @@ mod cli;
 use anyhow::Result;
 use clap::Parser;
 use cli::Cli;
-use tp::config;
+use tp::{config, muxer::Muxer, tmux_client::TmuxClient};
 
 fn main() -> Result<()> {
     match Cli::parse() {
@@ -23,7 +23,9 @@ fn new_session(name: impl Into<String>) -> Result<()> {
 }
 
 fn load_session(session: config::Session) -> Result<()> {
-    // muxer::apply(session)?;
-    let _ = session;
+    let client = TmuxClient::new();
+    let mut runner = Muxer::new(client);
+
+    let _ = runner.apply(session).unwrap();
     Ok(())
 }

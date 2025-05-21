@@ -1,3 +1,3 @@
 pub mod config;
 pub mod muxer;
-mod tmux_client;
+pub mod tmux_client;
