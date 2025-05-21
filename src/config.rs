@@ -13,7 +13,7 @@ pub enum Error {
     UnableToLoad(String),
     #[error("parser error: {0}")]
     UnableToParseConfig(String),
-    #[error("invalid sessino directory")]
+    #[error("invalid session directory")]
     InvalidSessionDirectory,
 }
 
