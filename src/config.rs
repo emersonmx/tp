@@ -1,11 +1,12 @@
 use std::{
-    env, fs, io,
+    env::{self},
+    fs, io,
     path::{Path, PathBuf},
     vec,
 };
 use thiserror::Error;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Error, PartialEq, Debug)]
 pub enum Error {
@@ -20,7 +21,10 @@ pub enum Error {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Session {
     pub name: String,
-    #[serde(default = "default_directory")]
+    #[serde(
+        default = "default_directory",
+        deserialize_with = "deserialize_directory"
+    )]
     pub directory: PathBuf,
     #[serde(default = "default_windows")]
     pub windows: Vec<Window>,
@@ -69,6 +73,22 @@ fn default_panes() -> Vec<Pane> {
         focus: false,
         command: String::new(),
     }]
+}
+
+fn deserialize_directory<'de, D>(deserializer: D) -> Result<PathBuf, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value: serde_yaml::Value = Deserialize::deserialize(deserializer)?;
+    let str_value = match serde_yaml::to_string(&value) {
+        Ok(s) => match env::var("HOME") {
+            Ok(e) => s.trim().replace("~", &e),
+            _ => ".".to_string(),
+        },
+        _ => ".".to_string(),
+    };
+    let path = Path::new(&str_value).to_path_buf();
+    Ok(path)
 }
 
 pub fn load_session(name: impl Into<String>) -> Result<Session, Error> {
