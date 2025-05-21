@@ -33,6 +33,7 @@ impl<C: Client> Muxer<C> {
 
     pub fn apply(&mut self, session: Session) -> Result<Output, Error> {
         let session_name = SessionName::new(session.name.to_owned());
+        let base_directory = session.directory.to_str().unwrap_or(".");
         let mut windows = vec![];
         if self.client.has_session(&session_name) {
             self.client.switch_to_session(&session_name);
@@ -44,13 +45,13 @@ impl<C: Client> Muxer<C> {
         }
 
         self.setup_base_ids()?;
-        self.client.new_session(&session_name);
+        self.client.new_session(&session_name, base_directory);
 
         let mut focus_pane: Option<PaneID> = None;
         for (widx, window) in session.windows.iter().enumerate() {
             let window_id = WindowID::new(&session_name, (self.base_window_id + widx).to_string());
             if widx > 0 {
-                self.client.new_window(&session_name);
+                self.client.new_window(&session_name, base_directory);
             }
 
             let window_name = window.name.clone().unwrap_or("".to_string());
@@ -66,7 +67,7 @@ impl<C: Client> Muxer<C> {
                 }
 
                 if pidx > 0 {
-                    self.client.new_pane(window_id.clone());
+                    self.client.new_pane(window_id.clone(), base_directory);
                 }
 
                 self.client
@@ -119,14 +120,14 @@ mod tests {
             fn get_option(&mut self, option_name: OptionName) -> Result<OptionValue, crate::tmux_client::Error>;
             fn set_option(&mut self, option_name: OptionName, option_value: OptionValue);
 
-            fn new_session(&mut self, session_name: &SessionName);
+            fn new_session(&mut self, session_name: &SessionName, directory: &str);
             fn switch_to_session(&mut self, session_name: &SessionName);
             fn has_session(&mut self, session_name: &SessionName) -> bool;
 
-            fn new_window(&mut self, session_name: &SessionName);
+            fn new_window(&mut self, session_name: &SessionName, directory: &str);
             fn rename_window(&mut self, window_id: WindowID, window_name: WindowName);
 
-            fn new_pane(&mut self, window_id: WindowID);
+            fn new_pane(&mut self, window_id: WindowID, directory: &str);
             fn select_pane(&mut self, pane_id: PaneID);
 
             fn send_keys(&mut self, pane_id: PaneID, keys: Keys);

@@ -106,14 +106,14 @@ pub trait Client {
     fn get_option(&mut self, option_name: OptionName) -> Result<OptionValue, Error>;
     fn set_option(&mut self, option_name: OptionName, option_value: OptionValue);
 
-    fn new_session(&mut self, session_name: &SessionName);
+    fn new_session(&mut self, session_name: &SessionName, directory: &str);
     fn switch_to_session(&mut self, session_name: &SessionName);
     fn has_session(&mut self, session_name: &SessionName) -> bool;
 
-    fn new_window(&mut self, session_name: &SessionName);
+    fn new_window(&mut self, session_name: &SessionName, directory: &str);
     fn rename_window(&mut self, window_id: WindowID, window_name: WindowName);
 
-    fn new_pane(&mut self, window_id: WindowID);
+    fn new_pane(&mut self, window_id: WindowID, directory: &str);
     fn select_pane(&mut self, pane_id: PaneID);
 
     fn send_keys(&mut self, pane_id: PaneID, keys: Keys);
@@ -143,9 +143,16 @@ impl Client for TmuxClient {
         todo!()
     }
 
-    fn new_session(&mut self, session_name: &SessionName) {
+    fn new_session(&mut self, session_name: &SessionName, directory: &str) {
         let _ = Command::new("tmux")
-            .args(["new-session", "-d", "-s", &session_name.value()])
+            .args([
+                "new-session",
+                "-d",
+                "-c",
+                directory,
+                "-s",
+                &session_name.value(),
+            ])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
@@ -172,9 +179,9 @@ impl Client for TmuxClient {
         }
     }
 
-    fn new_window(&mut self, session_name: &SessionName) {
+    fn new_window(&mut self, session_name: &SessionName, directory: &str) {
         let _ = Command::new("tmux")
-            .args(["new-window", "-t", &session_name.value()])
+            .args(["new-window", "-c", directory, "-t", &session_name.value()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
@@ -193,9 +200,9 @@ impl Client for TmuxClient {
             .output();
     }
 
-    fn new_pane(&mut self, window_id: WindowID) {
+    fn new_pane(&mut self, window_id: WindowID, directory: &str) {
         let _ = Command::new("tmux")
-            .args(["split-window", "-t", &window_id.value()])
+            .args(["split-window", "-c", directory, "-t", &window_id.value()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
