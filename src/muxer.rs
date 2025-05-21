@@ -45,6 +45,8 @@ impl<C: Client> Muxer<C> {
         self.setup_base_ids()?;
         self.client.new_session(&session_name);
 
+        self.client.switch_to_session(&session_name);
+
         let windows = vec![(self.base_window_id, vec![self.base_pane_id])];
         Ok(Output {
             session_name: session.name.to_owned(),
@@ -104,6 +106,7 @@ mod tests {
         let mut mock_client = MockClient::new();
         mock_client.expect_has_session().return_const(false);
         mock_client.expect_new_session().return_const(());
+        mock_client.expect_switch_to_session().return_const(());
         mock_client
             .expect_get_option()
             .returning(|_| Ok(OptionValue::new("0")));

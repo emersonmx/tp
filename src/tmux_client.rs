@@ -81,18 +81,21 @@ pub trait Client {
     fn use_layout(&mut self, layout: Layout);
 }
 
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct TmuxClient;
-
-impl TmuxClient {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
 
 impl Client for TmuxClient {
     fn get_option(&mut self, name: OptionName) -> Result<OptionValue, Error> {
-        let _ = name;
-        todo!()
+        let output = Command::new("tmux")
+            .args(["show-options", "-gv", name.value()])
+            .stderr(Stdio::null())
+            .output()
+            .map_err(|e| Error::OptionNotFound(e.to_string()))?;
+
+        let value = str::from_utf8(output.stdout.trim_ascii())
+            .map_err(|e| Error::OptionNotFound(e.to_string()))?;
+
+        Ok(OptionValue::new(value))
     }
 
     fn set_option(&mut self, name: OptionName, value: OptionValue) {
@@ -101,8 +104,11 @@ impl Client for TmuxClient {
     }
 
     fn new_session(&mut self, name: &SessionName) {
-        let _ = name;
-        todo!()
+        let _ = Command::new("tmux")
+            .args(["new-session", "-d", "-s", name.value()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .output();
     }
 
     fn switch_to_session(&mut self, name: &SessionName) {
@@ -114,12 +120,16 @@ impl Client for TmuxClient {
     }
 
     fn has_session(&mut self, name: &SessionName) -> bool {
-        Command::new("tmux")
+        let output = Command::new("tmux")
             .args(["has-session", "-t", name.value()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .status()
-            .is_ok()
+            .status();
+
+        match output {
+            Ok(status) => status.success(),
+            _ => false,
+        }
     }
 
     fn new_window(&mut self) {

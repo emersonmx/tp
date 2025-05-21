@@ -23,7 +23,7 @@ fn new_session(name: impl Into<String>) -> Result<()> {
 }
 
 fn load_session(session: config::Session) -> Result<()> {
-    let client = TmuxClient::new();
+    let client: TmuxClient = Default::default();
     let mut runner = Muxer::new(client);
 
     let _ = runner.apply(session).unwrap();
