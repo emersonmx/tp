@@ -1,14 +1,25 @@
-use super::tmux_client::{Client, SessionName};
-use crate::config::Session;
+use crate::{
+    config::Session,
+    tmux_client::{Client, OptionName, SessionName},
+};
 use thiserror::Error;
 
 #[derive(Error, PartialEq, Debug)]
-pub enum Error {}
+pub enum Error {
+    #[error("unable to setup base ids: {0}")]
+    BaseIdsError(String),
+}
 
 pub struct Muxer<C: Client> {
     client: C,
     base_window_id: usize,
     base_pane_id: usize,
+}
+
+pub struct Output {
+    pub session_name: String,
+    pub is_new_session: bool,
+    pub windows: Vec<(usize, Vec<usize>)>,
 }
 
 impl<C: Client> Muxer<C> {
@@ -20,33 +31,49 @@ impl<C: Client> Muxer<C> {
         }
     }
 
-    pub fn apply(&mut self, session: Session) -> Result<(), Error> {
-        self.setup_base_ids()?;
-
-        let session_name = SessionName::new(session.name);
+    pub fn apply(&mut self, session: Session) -> Result<Output, Error> {
+        let session_name = SessionName::new(session.name.to_owned());
         if self.client.has_session(&session_name) {
             self.client.switch_to_session(&session_name);
-            return Ok(());
+            return Ok(Output {
+                session_name: session.name.to_owned(),
+                is_new_session: false,
+                windows: vec![],
+            });
         }
 
+        self.setup_base_ids()?;
         self.client.new_session(&session_name);
 
-        Ok(())
+        let windows = vec![(self.base_window_id, vec![self.base_pane_id])];
+        Ok(Output {
+            session_name: session.name.to_owned(),
+            is_new_session: true,
+            windows,
+        })
     }
 
     fn setup_base_ids(&mut self) -> Result<(), Error> {
-        self.base_window_id = 0;
-        self.base_pane_id = 0;
+        self.base_window_id = self.get_index("base-index")?;
+        self.base_pane_id = self.get_index("pane-base-index")?;
         Ok(())
+    }
+
+    fn get_index(&mut self, name: &str) -> Result<usize, Error> {
+        let value = self
+            .client
+            .get_option(OptionName::new(name))
+            .map_err(|e| Error::BaseIdsError(e.to_string()))?
+            .value()
+            .parse()
+            .map_err(|e| Error::BaseIdsError(format!("{}", e)))?;
+        Ok(value)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use mockall::{
-        mock,
-        predicate::{self, *},
-    };
+    use mockall::mock;
 
     use super::*;
     use crate::tmux_client::*;
@@ -73,35 +100,50 @@ mod tests {
         }
     }
 
+    fn make_mock_client() -> MockClient {
+        let mut mock_client = MockClient::new();
+        mock_client.expect_has_session().return_const(false);
+        mock_client.expect_new_session().return_const(());
+        mock_client
+            .expect_get_option()
+            .returning(|_| Ok(OptionValue::new("0")));
+        mock_client
+    }
+
     #[test]
     fn switch_to_session_if_exists() {
         let session: Session = serde_yaml::from_str("name: test").unwrap();
-
         let mut mock_client = MockClient::new();
-        mock_client.expect_has_session().returning(|_| true);
-        mock_client
-            .expect_switch_to_session()
-            .with(predicate::eq(SessionName::new("test")))
-            .times(1)
-            .returning(|_| {});
+        mock_client.expect_has_session().return_const(true);
+        mock_client.expect_switch_to_session().return_const(());
         let mut runner = Muxer::new(mock_client);
 
-        runner.apply(session).unwrap();
+        let output = runner.apply(session).unwrap();
+
+        assert_eq!(output.session_name, "test".to_string());
+        assert!(!output.is_new_session);
     }
 
     #[test]
     fn create_a_session_if_not_exists() {
         let session: Session = serde_yaml::from_str("name: test").unwrap();
-
-        let mut mock_client = MockClient::new();
-        mock_client.expect_has_session().returning(|_| false);
-        mock_client
-            .expect_new_session()
-            .with(predicate::eq(SessionName::new("test")))
-            .times(1)
-            .returning(|_| {});
+        let mock_client = make_mock_client();
         let mut runner = Muxer::new(mock_client);
 
-        runner.apply(session).unwrap();
+        let output = runner.apply(session).unwrap();
+
+        assert_eq!(output.session_name, "test".to_string());
+        assert!(output.is_new_session);
+    }
+
+    #[test]
+    fn base_ids_starts_at_zero() {
+        let session: Session = serde_yaml::from_str("name: test").unwrap();
+        let mock_client = make_mock_client();
+        let mut runner = Muxer::new(mock_client);
+
+        let output = runner.apply(session).unwrap();
+
+        assert_eq!(output.windows, vec![(0, vec![0])]);
     }
 }

@@ -3,7 +3,7 @@ mod cli;
 use anyhow::Result;
 use clap::Parser;
 use cli::Cli;
-use tp::{config, muxer};
+use tp::config;
 
 fn main() -> Result<()> {
     match Cli::parse() {
@@ -24,5 +24,6 @@ fn new_session(name: impl Into<String>) -> Result<()> {
 
 fn load_session(session: config::Session) -> Result<()> {
     // muxer::apply(session)?;
+    let _ = session;
     Ok(())
 }

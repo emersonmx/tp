@@ -25,8 +25,28 @@ pub struct PaneID(WindowID, String);
 #[derive(Debug, Clone, PartialEq)]
 pub struct OptionName(String);
 
+impl OptionName {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self(name.into())
+    }
+
+    pub fn value(&self) -> &String {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct OptionValue(String);
+
+impl OptionValue {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self(name.into())
+    }
+
+    pub fn value(&self) -> &String {
+        &self.0
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Layout(String);
@@ -35,7 +55,10 @@ pub struct Layout(String);
 pub struct Keys(String);
 
 #[derive(Error, PartialEq, Debug)]
-pub enum Error {}
+pub enum Error {
+    #[error("option `{0}` not found")]
+    OptionNotFound(String),
+}
 
 pub trait Client {
     fn get_option(&mut self, name: OptionName) -> Result<OptionValue, Error>;
