@@ -86,6 +86,16 @@ pub struct Layout(String);
 #[derive(Debug, Clone, PartialEq)]
 pub struct Keys(String);
 
+impl Keys {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self(name.into())
+    }
+
+    pub fn value(&self) -> String {
+        self.0.clone()
+    }
+}
+
 #[derive(Error, PartialEq, Debug)]
 pub enum Error {
     #[error("option `{0}` not found")]
@@ -203,8 +213,11 @@ impl Client for TmuxClient {
     }
 
     fn send_keys(&mut self, pane_id: PaneID, keys: Keys) {
-        let (_, _) = (pane_id, keys);
-        todo!()
+        let _ = Command::new("tmux")
+            .args(["send-keys", "-t", &pane_id.value(), &keys.value(), "C-m"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .output();
     }
 
     fn use_layout(&mut self, layout: Layout) {

@@ -1,6 +1,6 @@
 use crate::{
     config::Session,
-    tmux_client::{Client, OptionName, PaneID, SessionName, WindowID, WindowName},
+    tmux_client::{Client, Keys, OptionName, PaneID, SessionName, WindowID, WindowName},
 };
 use thiserror::Error;
 
@@ -64,8 +64,12 @@ impl<C: Client> Muxer<C> {
                 let pane_id = PaneID::new(&window_id, (self.base_pane_id + pidx).to_string());
                 println!("{pidx} - {pane:?}");
                 if pane.focus {
-                    focus_pane = Some(pane_id);
+                    focus_pane = Some(pane_id.clone());
                 }
+
+                println!("{}", pane.command);
+                self.client
+                    .send_keys(pane_id.clone(), Keys::new(&pane.command));
             }
         }
         windows.push((self.base_window_id, vec![self.base_pane_id]));
@@ -138,6 +142,7 @@ mod tests {
         mock_client
             .expect_get_option()
             .returning(|_| Ok(OptionValue::new("0")));
+        mock_client.expect_send_keys().return_const(());
         mock_client
     }
 
