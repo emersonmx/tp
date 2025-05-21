@@ -1,6 +1,6 @@
 use crate::{
     config::Session,
-    tmux_client::{Client, OptionName, SessionName},
+    tmux_client::{Client, OptionName, SessionName, WindowID, WindowName},
 };
 use thiserror::Error;
 
@@ -33,21 +33,37 @@ impl<C: Client> Muxer<C> {
 
     pub fn apply(&mut self, session: Session) -> Result<Output, Error> {
         let session_name = SessionName::new(session.name.to_owned());
+        let mut windows = vec![];
         if self.client.has_session(&session_name) {
             self.client.switch_to_session(&session_name);
             return Ok(Output {
                 session_name: session.name.to_owned(),
                 is_new_session: false,
-                windows: vec![],
+                windows,
             });
         }
 
         self.setup_base_ids()?;
         self.client.new_session(&session_name);
 
+        for (widx, window) in session.windows.iter().enumerate() {
+            println!("{widx} - {window:?}");
+            if widx > 0 {
+                self.client.new_window(&session_name);
+            }
+
+            let window_name = window.name.clone().unwrap_or("".to_string());
+            if !window_name.is_empty() {
+                self.client.rename_window(
+                    WindowID::new(&session_name, (self.base_window_id + widx).to_string()),
+                    WindowName::new(window_name),
+                );
+            }
+        }
+        windows.push((self.base_window_id, vec![self.base_pane_id]));
+
         self.client.switch_to_session(&session_name);
 
-        let windows = vec![(self.base_window_id, vec![self.base_pane_id])];
         Ok(Output {
             session_name: session.name.to_owned(),
             is_new_session: true,
@@ -90,7 +106,7 @@ mod tests {
             fn switch_to_session(&mut self, name: &SessionName);
             fn has_session(&mut self, name: &SessionName) -> bool;
 
-            fn new_window(&mut self);
+            fn new_window(&mut self, name: &SessionName);
             fn rename_window(&mut self, id: WindowID, name: WindowName);
 
             fn new_pane(&mut self);
