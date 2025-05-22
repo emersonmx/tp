@@ -19,6 +19,7 @@ pub enum Error {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Session {
     pub name: String,
     #[serde(
