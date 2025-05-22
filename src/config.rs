@@ -1,19 +1,19 @@
 use std::{
     env::{self},
     fs, io,
-    path::{Path, PathBuf},
+    path::PathBuf,
     vec,
 };
 use thiserror::Error;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
-#[derive(Error, PartialEq, Debug)]
+#[derive(Error, Debug)]
 pub enum Error {
     #[error("unable to load: {0}")]
-    UnableToLoad(String),
+    UnableToLoad(#[from] io::Error),
     #[error("parser error: {0}")]
-    UnableToParseConfig(String),
+    UnableToParseConfig(#[from] serde_yaml::Error),
     #[error("invalid session directory")]
     InvalidSessionDirectory,
 }
@@ -30,14 +30,14 @@ pub struct Session {
     pub windows: Vec<Window>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Window {
     pub name: Option<String>,
     #[serde(default = "default_panes")]
     pub panes: Vec<Pane>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Pane {
     #[serde(default)]
     pub focus: bool,
@@ -45,20 +45,8 @@ pub struct Pane {
     pub command: String,
 }
 
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self {
-        Error::UnableToLoad(err.to_string())
-    }
-}
-
-impl From<serde_yaml::Error> for Error {
-    fn from(err: serde_yaml::Error) -> Self {
-        Error::UnableToParseConfig(err.to_string())
-    }
-}
-
 fn default_directory() -> PathBuf {
-    Path::new(".").to_path_buf()
+    ".".into()
 }
 
 fn default_windows() -> Vec<Window> {
@@ -69,10 +57,7 @@ fn default_windows() -> Vec<Window> {
 }
 
 fn default_panes() -> Vec<Pane> {
-    vec![Pane {
-        focus: false,
-        command: String::new(),
-    }]
+    vec![Pane::default()]
 }
 
 fn deserialize_directory<'de, D>(deserializer: D) -> Result<PathBuf, D::Error>
@@ -93,23 +78,23 @@ fn expand_tilde(path: &str) -> String {
     path.to_string()
 }
 
-pub fn load_session(name: impl Into<String>) -> Result<Session, Error> {
-    let name = name.into();
+pub fn load_session(name: impl AsRef<str>) -> Result<Session, Error> {
     let dir = sessions_dir().ok_or(Error::InvalidSessionDirectory)?;
-    let session_path = dir.join(format!("{}.yaml", name)).canonicalize()?;
-    let content = fs::read_to_string(session_path)?;
+    let path = dir.join(format!("{}.yaml", name.as_ref())).canonicalize()?;
+    let content = fs::read_to_string(path)?;
     let session = serde_yaml::from_str(&content)?;
     Ok(session)
 }
 
 fn sessions_dir() -> Option<PathBuf> {
-    match env::var("TP_SESSIONS_DIR") {
-        Ok(d) => Some(PathBuf::from(d)),
-        Err(_) => match env::var("HOME") {
-            Ok(e) => Some(PathBuf::from(e).join(".config/tp")),
-            Err(_) => None,
-        },
-    }
+    env::var("TP_SESSIONS_DIR")
+        .ok()
+        .map(PathBuf::from)
+        .or_else(|| {
+            env::var("HOME")
+                .ok()
+                .map(|home| PathBuf::from(home).join(".config/tp"))
+        })
 }
 
 #[cfg(test)]
@@ -122,25 +107,35 @@ mod tests {
         let session: Session = serde_yaml::from_str(content).unwrap();
 
         assert_eq!(session.name, "simple-test");
-        assert_eq!(session.directory, Path::new("."));
+        assert_eq!(session.directory, PathBuf::from("."));
+    }
+
+    #[test]
+    fn read_not_found_session_file() {
+        let session = load_session("not-found/path");
+
+        assert!(matches!(session, Err(Error::UnableToLoad(_))));
     }
 
     #[test]
     fn read_incorrect_session_file() {
         let content = "parser error";
-        let session: Result<Session, Error> =
-            serde_yaml::from_str(content).map_err(|e| Error::UnableToParseConfig(e.to_string()));
+        let session: Result<Session, Error> = serde_yaml::from_str(content).map_err(Error::from);
 
-        assert_eq!(
-            session,
-            Err(Error::UnableToParseConfig(
-                "invalid type: string \"parser error\", expected struct Session".to_string()
-            ))
-        );
+        assert!(matches!(session, Err(Error::UnableToParseConfig(_))));
     }
 
     #[test]
-    fn session_must_have_at_least_one_window_with_one_pane() {
+    fn load_session_invalid_dir() {
+        temp_env::with_vars_unset(["HOME", "TP_SESSIONS_DIR"], || {
+            let session = load_session("a-session-path");
+
+            assert!(matches!(session, Err(Error::InvalidSessionDirectory)));
+        });
+    }
+
+    #[test]
+    fn session_must_have_one_window_with_one_pane() {
         let content = "name: simple-test";
         let session: Session = serde_yaml::from_str(content).unwrap();
 
@@ -152,7 +147,7 @@ mod tests {
     }
 
     #[test]
-    fn window_must_have_at_least_one_pane() {
+    fn window_must_have_one_pane() {
         let content = "
         name: simple-test
         windows:

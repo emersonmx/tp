@@ -12,4 +12,4 @@ thiserror = "2.0.12"
 
 [dev-dependencies]
 mockall = "0.13.1"
-tempfile = "3.19.1"
+temp-env = "0.3.6"
