@@ -98,6 +98,23 @@ fn sessions_dir() -> Option<PathBuf> {
         })
 }
 
+pub fn list_sessions() -> Vec<String> {
+    sessions_dir()
+        .and_then(|dir| fs::read_dir(dir).ok())
+        .into_iter()
+        .flatten()
+        .filter_map(|entry_result| entry_result.ok())
+        .map(|entry| entry.path())
+        .filter(|path| path.is_file())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "yaml"))
+        .filter_map(|path| {
+            path.file_stem()
+                .and_then(|stem| stem.to_str())
+                .map(|s| s.to_string())
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -161,5 +178,73 @@ mod tests {
         assert_eq!(session.windows[0].name, None);
         assert!(!session.windows[0].panes[0].focus);
         assert_eq!(session.windows[0].panes[0].command, String::new());
+    }
+
+    #[test]
+    fn list_all_sessions() {
+        temp_env::with_var(
+            "TP_SESSIONS_DIR",
+            Some("/tmp/test_list_all_sessions".to_string()),
+            || {
+                let tmp_dir = PathBuf::from("/tmp/test_list_all_sessions");
+                fs::create_dir_all(&tmp_dir).expect("Failed to create test directory");
+
+                fs::write(tmp_dir.join("session1.yaml"), "name: session1").unwrap();
+                fs::write(tmp_dir.join("session2.yaml"), "name: session2").unwrap();
+                fs::write(tmp_dir.join("other_file.txt"), "content").unwrap();
+                fs::create_dir(tmp_dir.join("subdir")).unwrap();
+
+                let mut sessions = list_sessions();
+                sessions.sort();
+
+                assert_eq!(
+                    sessions,
+                    vec!["session1".to_string(), "session2".to_string()]
+                );
+
+                fs::remove_dir_all(&tmp_dir).expect("Failed to clean up test directory");
+            },
+        );
+    }
+
+    #[test]
+    fn list_sessions_when_empty_dir() {
+        temp_env::with_var(
+            "TP_SESSIONS_DIR",
+            Some("/tmp/list_sessions_when_empty_dir".to_string()),
+            || {
+                let tmp_dir = PathBuf::from("/tmp/list_sessions_when_empty_dir");
+                fs::create_dir_all(&tmp_dir).expect("Failed to create test directory");
+
+                let sessions = list_sessions();
+                assert!(sessions.is_empty());
+
+                fs::remove_dir_all(&tmp_dir).expect("Failed to clean up test directory");
+            },
+        );
+    }
+
+    #[test]
+    fn list_sessions_when_sessions_dir_not_exists() {
+        temp_env::with_vars_unset(["HOME", "TP_SESSIONS_DIR"], || {
+            let sessions = list_sessions();
+            assert!(sessions.is_empty());
+        });
+    }
+
+    #[test]
+    fn list_sessions_with_read_error() {
+        temp_env::with_var(
+            "TP_SESSIONS_DIR",
+            Some("/tmp/not_a_dir_file".to_string()),
+            || {
+                fs::write("/tmp/not_a_dir_file", "this is a file").unwrap();
+
+                let sessions = list_sessions();
+                assert!(sessions.is_empty());
+
+                fs::remove_file("/tmp/not_a_dir_file").unwrap();
+            },
+        );
     }
 }

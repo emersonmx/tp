@@ -14,6 +14,9 @@ fn main() -> Result<()> {
 }
 
 fn list_sessions() -> Result<()> {
+    for session in config::list_sessions() {
+        println!("{session}");
+    }
     Ok(())
 }
 
