@@ -10,8 +10,8 @@ impl SessionName {
         Self(name.into())
     }
 
-    pub fn value(&self) -> String {
-        self.0.clone()
+    pub fn value(&self) -> &str {
+        &self.0
     }
 }
 
@@ -19,8 +19,8 @@ impl SessionName {
 pub struct WindowID(SessionName, String);
 
 impl WindowID {
-    pub fn new(session: &SessionName, name: impl Into<String>) -> Self {
-        Self(session.clone(), name.into())
+    pub fn new(session_name: &SessionName, window_id: impl Into<String>) -> Self {
+        Self(session_name.clone(), window_id.into())
     }
 
     pub fn value(&self) -> String {
@@ -36,8 +36,8 @@ impl WindowName {
         Self(name.into())
     }
 
-    pub fn value(&self) -> String {
-        self.0.clone()
+    pub fn value(&self) -> &str {
+        &self.0
     }
 }
 
@@ -45,8 +45,8 @@ impl WindowName {
 pub struct PaneID(WindowID, String);
 
 impl PaneID {
-    pub fn new(window: &WindowID, name: impl Into<String>) -> Self {
-        Self(window.clone(), name.into())
+    pub fn new(window_id: &WindowID, pane_id: impl Into<String>) -> Self {
+        Self(window_id.clone(), pane_id.into())
     }
 
     pub fn value(&self) -> String {
@@ -62,8 +62,8 @@ impl OptionName {
         Self(name.into())
     }
 
-    pub fn value(&self) -> String {
-        self.0.clone()
+    pub fn value(&self) -> &str {
+        &self.0
     }
 }
 
@@ -75,8 +75,8 @@ impl OptionValue {
         Self(name.into())
     }
 
-    pub fn value(&self) -> String {
-        self.0.clone()
+    pub fn value(&self) -> &str {
+        &self.0
     }
 }
 
@@ -91,8 +91,8 @@ impl Keys {
         Self(name.into())
     }
 
-    pub fn value(&self) -> String {
-        self.0.clone()
+    pub fn value(&self) -> &str {
+        &self.0
     }
 }
 
@@ -127,7 +127,7 @@ pub struct TmuxClient;
 impl Client for TmuxClient {
     fn get_option(&mut self, option_name: OptionName) -> Result<OptionValue, Error> {
         let output = Command::new("tmux")
-            .args(["show-options", "-gv", &option_name.value()])
+            .args(["show-options", "-gv", option_name.value()])
             .stderr(Stdio::null())
             .output()
             .map_err(|e| Error::OptionNotFound(e.to_string()))?;
@@ -151,7 +151,7 @@ impl Client for TmuxClient {
                 "-c",
                 directory,
                 "-s",
-                &session_name.value(),
+                session_name.value(),
             ])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -160,7 +160,7 @@ impl Client for TmuxClient {
 
     fn switch_to_session(&mut self, session_name: &SessionName) {
         let _ = Command::new("tmux")
-            .args(["switch-client", "-t", &session_name.value()])
+            .args(["switch-client", "-t", session_name.value()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
@@ -168,7 +168,7 @@ impl Client for TmuxClient {
 
     fn has_session(&mut self, session_name: &SessionName) -> bool {
         let output = Command::new("tmux")
-            .args(["has-session", "-t", &session_name.value()])
+            .args(["has-session", "-t", session_name.value()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status();
@@ -181,7 +181,7 @@ impl Client for TmuxClient {
 
     fn new_window(&mut self, session_name: &SessionName, directory: &str) {
         let _ = Command::new("tmux")
-            .args(["new-window", "-c", directory, "-t", &session_name.value()])
+            .args(["new-window", "-c", directory, "-t", session_name.value()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
@@ -193,7 +193,7 @@ impl Client for TmuxClient {
                 "rename-window",
                 "-t",
                 &window_id.value(),
-                &window_name.value(),
+                window_name.value(),
             ])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -225,7 +225,7 @@ impl Client for TmuxClient {
 
     fn send_keys(&mut self, pane_id: PaneID, keys: Keys) {
         let _ = Command::new("tmux")
-            .args(["send-keys", "-t", &pane_id.value(), &keys.value(), "C-m"])
+            .args(["send-keys", "-t", &pane_id.value(), keys.value(), "C-m"])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
