@@ -79,16 +79,18 @@ fn deserialize_directory<'de, D>(deserializer: D) -> Result<PathBuf, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let value: serde_yaml::Value = Deserialize::deserialize(deserializer)?;
-    let str_value = match serde_yaml::to_string(&value) {
-        Ok(s) => match env::var("HOME") {
-            Ok(e) => s.trim().replace("~", &e),
-            _ => ".".to_string(),
-        },
-        _ => ".".to_string(),
-    };
-    let path = Path::new(&str_value).to_path_buf();
-    Ok(path)
+    let value = String::deserialize(deserializer)?;
+    let expanded = expand_tilde(&value);
+    Ok(PathBuf::from(expanded))
+}
+
+fn expand_tilde(path: &str) -> String {
+    if let Some(stripped) = path.strip_prefix("~/") {
+        if let Ok(home) = env::var("HOME") {
+            return format!("{}/{}", home.trim_end_matches('/'), stripped);
+        }
+    }
+    path.to_string()
 }
 
 pub fn load_session(name: impl Into<String>) -> Result<Session, Error> {
