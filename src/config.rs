@@ -99,7 +99,7 @@ fn sessions_dir() -> Option<PathBuf> {
 }
 
 pub fn list_sessions() -> Vec<String> {
-    sessions_dir()
+    let mut sessions: Vec<String> = sessions_dir()
         .and_then(|dir| fs::read_dir(dir).ok())
         .into_iter()
         .flatten()
@@ -112,7 +112,9 @@ pub fn list_sessions() -> Vec<String> {
                 .and_then(|stem| stem.to_str())
                 .map(|s| s.to_string())
         })
-        .collect()
+        .collect();
+    sessions.sort();
+    sessions
 }
 
 #[cfg(test)]
