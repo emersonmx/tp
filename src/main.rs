@@ -1,7 +1,10 @@
 mod cli;
 
+use std::io;
+
 use anyhow::Result;
-use clap::Parser;
+use clap::{CommandFactory, Parser};
+use clap_complete::Shell;
 use cli::Cli;
 use tp::{config, muxer::Muxer, tmux_client::TmuxClient};
 
@@ -10,6 +13,7 @@ fn main() -> Result<()> {
         Cli::List => list_sessions(),
         Cli::New { name } => new_session(name),
         Cli::Load { session } => load_session(session),
+        Cli::Completions { shell } => print_completions(shell),
     }
 }
 
@@ -30,5 +34,12 @@ fn load_session(session: config::Session) -> Result<()> {
     let mut runner = Muxer::new(client);
 
     let _ = runner.apply(session).unwrap();
+    Ok(())
+}
+
+fn print_completions(shell: Shell) -> Result<()> {
+    let mut cmd = Cli::command();
+    let cmd_name = cmd.get_name().to_string();
+    clap_complete::generate(shell, &mut cmd, cmd_name, &mut io::stdout());
     Ok(())
 }
