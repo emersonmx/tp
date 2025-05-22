@@ -24,8 +24,12 @@ fn list_sessions() -> Result<()> {
     Ok(())
 }
 
-fn new_session(name: impl Into<String>) -> Result<()> {
-    println!("{:?}", name.into());
+fn new_session(session_name: impl AsRef<str>) -> Result<()> {
+    let session_path = config::new_session(session_name.as_ref())?;
+    println!(
+        "Created new session configuration at: {}",
+        session_path.display()
+    );
     Ok(())
 }
 

@@ -79,6 +79,28 @@ fn expand_tilde(path: &str) -> String {
     path.to_string()
 }
 
+pub fn new_session(name: impl Into<String>) -> Result<PathBuf, Error> {
+    let session = Session {
+        name: name.into(),
+        directory: default_directory(),
+        windows: vec![Window {
+            name: Some("shell".to_string()),
+            panes: vec![Pane {
+                focus: true,
+                command: "echo 'Hello :)'".to_string(),
+            }],
+        }],
+    };
+
+    let dir = sessions_dir().ok_or(Error::InvalidSessionDirectory)?;
+    let path = dir.join(format!("{}.yaml", session.name));
+    let content = serde_yaml::to_string(&session)?;
+
+    fs::write(&path, content)?;
+
+    Ok(path)
+}
+
 pub fn load_session(name: impl AsRef<str>) -> Result<Session, Error> {
     let dir = sessions_dir().ok_or(Error::InvalidSessionDirectory)?;
     let path = dir.join(format!("{}.yaml", name.as_ref())).canonicalize()?;
@@ -120,6 +142,7 @@ pub fn list_sessions() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn read_simple_session_file() {
@@ -184,46 +207,32 @@ mod tests {
 
     #[test]
     fn list_all_sessions() {
-        temp_env::with_var(
-            "TP_SESSIONS_DIR",
-            Some("/tmp/test_list_all_sessions".to_string()),
-            || {
-                let tmp_dir = PathBuf::from("/tmp/test_list_all_sessions");
-                fs::create_dir_all(&tmp_dir).expect("Failed to create test directory");
+        let temp_test_dir = tempdir().expect("Failed to create temporary directory");
+        let tmp_dir = temp_test_dir.path();
+        temp_env::with_var("TP_SESSIONS_DIR", Some(tmp_dir.to_str().unwrap()), || {
+            fs::write(tmp_dir.join("session1.yaml"), "name: session1").unwrap();
+            fs::write(tmp_dir.join("session2.yaml"), "name: session2").unwrap();
+            fs::write(tmp_dir.join("other_file.txt"), "content").unwrap();
+            fs::create_dir(tmp_dir.join("subdir")).unwrap();
 
-                fs::write(tmp_dir.join("session1.yaml"), "name: session1").unwrap();
-                fs::write(tmp_dir.join("session2.yaml"), "name: session2").unwrap();
-                fs::write(tmp_dir.join("other_file.txt"), "content").unwrap();
-                fs::create_dir(tmp_dir.join("subdir")).unwrap();
+            let mut sessions = list_sessions();
+            sessions.sort();
 
-                let mut sessions = list_sessions();
-                sessions.sort();
-
-                assert_eq!(
-                    sessions,
-                    vec!["session1".to_string(), "session2".to_string()]
-                );
-
-                fs::remove_dir_all(&tmp_dir).expect("Failed to clean up test directory");
-            },
-        );
+            assert_eq!(
+                sessions,
+                vec!["session1".to_string(), "session2".to_string()]
+            );
+        });
     }
 
     #[test]
     fn list_sessions_when_empty_dir() {
-        temp_env::with_var(
-            "TP_SESSIONS_DIR",
-            Some("/tmp/list_sessions_when_empty_dir".to_string()),
-            || {
-                let tmp_dir = PathBuf::from("/tmp/list_sessions_when_empty_dir");
-                fs::create_dir_all(&tmp_dir).expect("Failed to create test directory");
-
-                let sessions = list_sessions();
-                assert!(sessions.is_empty());
-
-                fs::remove_dir_all(&tmp_dir).expect("Failed to clean up test directory");
-            },
-        );
+        let temp_test_dir = tempdir().expect("Failed to create temporary directory");
+        let tmp_dir = temp_test_dir.path();
+        temp_env::with_var("TP_SESSIONS_DIR", Some(tmp_dir.to_str().unwrap()), || {
+            let sessions = list_sessions();
+            assert!(sessions.is_empty());
+        });
     }
 
     #[test]
@@ -236,17 +245,54 @@ mod tests {
 
     #[test]
     fn list_sessions_with_read_error() {
-        temp_env::with_var(
-            "TP_SESSIONS_DIR",
-            Some("/tmp/not_a_dir_file".to_string()),
-            || {
-                fs::write("/tmp/not_a_dir_file", "this is a file").unwrap();
+        let temp_file =
+            tempfile::NamedTempFile::new().expect("Failed to create temporary directory");
+        let tmp_dir = temp_file.path();
+        temp_env::with_var("TP_SESSIONS_DIR", Some(tmp_dir.to_str().unwrap()), || {
+            fs::write(tmp_dir, "this is a file").unwrap();
 
-                let sessions = list_sessions();
-                assert!(sessions.is_empty());
+            let sessions = list_sessions();
+            assert!(sessions.is_empty());
+        });
+    }
 
-                fs::remove_file("/tmp/not_a_dir_file").unwrap();
-            },
-        );
+    #[test]
+    fn when_new_session_success() {
+        let session_name = "new-test-session";
+        let temp_test_dir = tempdir().expect("Failed to create temporary directory");
+        let tmp_dir = temp_test_dir.path();
+
+        temp_env::with_var("TP_SESSIONS_DIR", Some(tmp_dir.to_str().unwrap()), || {
+            let result = new_session(session_name);
+            assert!(result.is_ok());
+
+            let created_path = result.unwrap();
+            let expected_path = tmp_dir.join(format!("{}.yaml", session_name));
+            assert_eq!(created_path, expected_path);
+            assert!(created_path.exists());
+
+            let content = fs::read_to_string(&created_path).expect("Failed to read created file");
+            let session: Session =
+                serde_yaml::from_str(&content).expect("Failed to deserialize created session");
+
+            assert_eq!(session.name, session_name);
+            assert_eq!(session.directory, PathBuf::from("."));
+            assert_eq!(session.windows.len(), 1);
+            assert_eq!(session.windows[0].name, Some("shell".to_string()));
+            assert_eq!(session.windows[0].panes.len(), 1);
+            assert!(session.windows[0].panes[0].focus);
+            assert_eq!(
+                session.windows[0].panes[0].command,
+                "echo 'Hello :)'".to_string()
+            );
+        });
+    }
+
+    #[test]
+    fn when_new_session_invalid_dir() {
+        temp_env::with_vars_unset(["HOME", "TP_SESSIONS_DIR"], || {
+            let result = new_session("some-session");
+            assert!(matches!(result, Err(Error::InvalidSessionDirectory)));
+        });
     }
 }
