@@ -43,7 +43,7 @@ pub struct Pane {
     #[serde(default)]
     pub focus: bool,
     #[serde(default)]
-    pub command: String,
+    pub command: Option<String>,
 }
 
 fn default_directory() -> PathBuf {
@@ -87,7 +87,7 @@ pub fn new_session(name: impl Into<String>) -> Result<PathBuf, Error> {
             name: Some("shell".to_string()),
             panes: vec![Pane {
                 focus: true,
-                command: "echo 'Hello :)'".to_string(),
+                command: Some("echo 'Hello :)'".to_string()),
             }],
         }],
     };
@@ -186,7 +186,7 @@ mod tests {
         assert_eq!(session.windows[0].panes.len(), 1);
         assert_eq!(session.windows[0].name, None);
         assert!(!session.windows[0].panes[0].focus);
-        assert_eq!(session.windows[0].panes[0].command, String::new());
+        assert_eq!(session.windows[0].panes[0].command, None);
     }
 
     #[test]
@@ -202,7 +202,7 @@ mod tests {
         assert_eq!(session.windows[0].panes.len(), 1);
         assert_eq!(session.windows[0].name, None);
         assert!(!session.windows[0].panes[0].focus);
-        assert_eq!(session.windows[0].panes[0].command, String::new());
+        assert_eq!(session.windows[0].panes[0].command, None);
     }
 
     #[test]
@@ -283,7 +283,7 @@ mod tests {
             assert!(session.windows[0].panes[0].focus);
             assert_eq!(
                 session.windows[0].panes[0].command,
-                "echo 'Hello :)'".to_string()
+                Some("echo 'Hello :)'".to_string())
             );
         });
     }

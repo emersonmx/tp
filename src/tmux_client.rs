@@ -28,7 +28,7 @@ impl From<&WindowID> for Id {
 
 impl From<&PaneID> for Id {
     fn from(value: &PaneID) -> Self {
-        Id(format!("{}:{}", Into::<Id>::into(&value.0), value.1))
+        Id(format!("{}.{}", Into::<Id>::into(&value.0), value.1))
     }
 }
 
