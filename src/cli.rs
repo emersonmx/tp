@@ -6,7 +6,7 @@ use clap_complete::Shell;
 #[command(about = "A simple tmux session loader")]
 pub enum Cli {
     /// Create a new session file
-    New { name: String },
+    New { session_name: String },
     /// Load a session
     Load {
         #[arg(value_parser = parser_session_config)]

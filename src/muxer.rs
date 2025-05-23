@@ -49,7 +49,8 @@ impl<C: Client> Muxer<C> {
 
         let mut focus_pane: Option<PaneID> = None;
         for (widx, window) in session.windows.iter().enumerate() {
-            let window_id = WindowID::new(&session_id, (self.base_window_id + widx).to_string());
+            let widx = self.base_window_id + widx;
+            let window_id = WindowID::new(&session_id, widx.to_string());
             if widx > 0 {
                 self.client.new_window(&session_id, base_directory);
             }
@@ -60,8 +61,10 @@ impl<C: Client> Muxer<C> {
                     .rename_window(window_id.clone(), WindowName::new(window_name));
             }
 
+            let mut panes: Vec<usize> = vec![];
             for (pidx, pane) in window.panes.iter().enumerate() {
-                let pane_id = PaneID::new(&window_id, (self.base_pane_id + pidx).to_string());
+                let pidx = self.base_pane_id + pidx;
+                let pane_id = PaneID::new(&window_id, pidx.to_string());
                 if pane.focus {
                     focus_pane = Some(pane_id.clone());
                 }
@@ -72,9 +75,12 @@ impl<C: Client> Muxer<C> {
 
                 self.client
                     .send_keys(pane_id.clone(), Keys::new(&pane.command));
+
+                panes.push(pidx);
             }
+
+            windows.push((widx, panes));
         }
-        windows.push((self.base_window_id, vec![self.base_pane_id]));
 
         if let Some(pane) = focus_pane {
             self.client.select_pane(pane);

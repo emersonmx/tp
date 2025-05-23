@@ -4,46 +4,40 @@ use std::io;
 
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
-use clap_complete::Shell;
 use cli::Cli;
 use tp::{config, muxer::Muxer, tmux_client::TmuxClient};
 
 fn main() -> Result<()> {
     match Cli::parse() {
-        Cli::List => list_sessions(),
-        Cli::New { name } => new_session(name),
-        Cli::Load { session } => load_session(session),
-        Cli::Completions { shell } => print_completions(shell),
+        Cli::List => {
+            for session in config::list_sessions() {
+                println!("{session}");
+            }
+        }
+        Cli::New { session_name } => {
+            let session_path = config::new_session(session_name)?;
+            println!(
+                "Created new session configuration at: {}",
+                session_path.display()
+            );
+        }
+        Cli::Load { session } => {
+            let client: TmuxClient = Default::default();
+            let mut runner = Muxer::new(client);
+
+            let output = runner.apply(session)?;
+            if output.is_new_session {
+                println!("Session {} was created!", output.session_name);
+            } else {
+                println!("Session {} exists! Switching...", output.session_name);
+            }
+        }
+        Cli::Completions { shell } => {
+            let mut cmd = Cli::command();
+            let cmd_name = cmd.get_name().to_string();
+            clap_complete::generate(shell, &mut cmd, cmd_name, &mut io::stdout());
+        }
     }
-}
 
-fn list_sessions() -> Result<()> {
-    for session in config::list_sessions() {
-        println!("{session}");
-    }
-    Ok(())
-}
-
-fn new_session(session_name: impl AsRef<str>) -> Result<()> {
-    let session_path = config::new_session(session_name.as_ref())?;
-    println!(
-        "Created new session configuration at: {}",
-        session_path.display()
-    );
-    Ok(())
-}
-
-fn load_session(session: config::Session) -> Result<()> {
-    let client: TmuxClient = Default::default();
-    let mut runner = Muxer::new(client);
-
-    let _ = runner.apply(session).unwrap();
-    Ok(())
-}
-
-fn print_completions(shell: Shell) -> Result<()> {
-    let mut cmd = Cli::command();
-    let cmd_name = cmd.get_name().to_string();
-    clap_complete::generate(shell, &mut cmd, cmd_name, &mut io::stdout());
     Ok(())
 }
