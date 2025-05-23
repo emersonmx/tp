@@ -29,7 +29,10 @@ fn main() -> Result<()> {
             if output.is_new_session {
                 println!("Session {} was created!", output.session_name);
             } else {
-                println!("Session {} exists! Switching...", output.session_name);
+                println!(
+                    "Session {} already exists! Switching...",
+                    output.session_name
+                );
             }
         }
         Cli::Completions { shell } => {
