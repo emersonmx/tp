@@ -22,7 +22,7 @@ fn main() -> Result<()> {
             );
         }
         Cli::Load { session } => {
-            let output = muxer::apply(session)?;
+            let output = muxer::apply(&session)?;
             if output.is_new_session {
                 println!("Session {} was created!", output.session_name);
             } else {

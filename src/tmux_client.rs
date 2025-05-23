@@ -8,15 +8,27 @@ use thiserror::Error;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Id(String);
 
-impl Id {
-    fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-}
-
 impl Display for Id {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl From<&SessionId> for Id {
+    fn from(value: &SessionId) -> Self {
+        Id(value.0.to_owned())
+    }
+}
+
+impl From<&WindowID> for Id {
+    fn from(value: &WindowID) -> Self {
+        Id(format!("{}:{}", Into::<Id>::into(&value.0), value.1))
+    }
+}
+
+impl From<&PaneID> for Id {
+    fn from(value: &PaneID) -> Self {
+        Id(format!("{}:{}", Into::<Id>::into(&value.0), value.1))
     }
 }
 
@@ -27,9 +39,11 @@ impl SessionId {
     pub fn new(session_id: impl Into<String>) -> Self {
         Self(session_id.into())
     }
+}
 
-    pub fn to_id(&self) -> Id {
-        Id::new(&self.0)
+impl Display for SessionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", Into::<Id>::into(self))
     }
 }
 
@@ -40,9 +54,11 @@ impl WindowID {
     pub fn new(session_id: &SessionId, window_id: impl Into<String>) -> Self {
         Self(session_id.to_owned(), window_id.into())
     }
+}
 
-    pub fn to_id(&self) -> Id {
-        Id::new(format!("{}:{}", self.0.to_id(), self.1))
+impl Display for WindowID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", Into::<Id>::into(self))
     }
 }
 
@@ -53,9 +69,11 @@ impl PaneID {
     pub fn new(window_id: &WindowID, pane_id: impl Into<String>) -> Self {
         Self(window_id.to_owned(), pane_id.into())
     }
+}
 
-    pub fn to_id(&self) -> Id {
-        Id::new(format!("{}:{}", self.0.to_id(), self.1))
+impl Display for PaneID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", Into::<Id>::into(self))
     }
 }
 
@@ -122,29 +140,29 @@ pub enum Error {
 
 #[allow(dead_code)]
 pub trait Client {
-    fn get_option(&mut self, option_name: OptionName) -> Result<OptionValue, Error>;
-    fn set_option(&mut self, option_name: OptionName, option_value: OptionValue);
+    fn get_option(&mut self, option_name: &OptionName) -> Result<OptionValue, Error>;
+    fn set_option(&mut self, option_name: &OptionName, option_value: &OptionValue);
 
     fn new_session(&mut self, session_id: &SessionId, directory: &str);
     fn switch_to_session(&mut self, session_id: &SessionId);
     fn has_session(&mut self, session_id: &SessionId) -> bool;
 
     fn new_window(&mut self, session_id: &SessionId, directory: &str);
-    fn rename_window(&mut self, window_id: WindowID, window_name: WindowName);
+    fn rename_window(&mut self, window_id: &WindowID, window_name: &WindowName);
 
-    fn new_pane(&mut self, window_id: WindowID, directory: &str);
-    fn select_pane(&mut self, pane_id: PaneID);
+    fn new_pane(&mut self, window_id: &WindowID, directory: &str);
+    fn select_pane(&mut self, pane_id: &PaneID);
 
-    fn send_keys(&mut self, pane_id: PaneID, keys: Keys);
+    fn send_keys(&mut self, pane_id: &PaneID, keys: Keys);
 
-    fn use_layout(&mut self, layout: Layout);
+    fn use_layout(&mut self, layout: &Layout);
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TmuxClient;
 
 impl Client for TmuxClient {
-    fn get_option(&mut self, option_name: OptionName) -> Result<OptionValue, Error> {
+    fn get_option(&mut self, option_name: &OptionName) -> Result<OptionValue, Error> {
         let output = Command::new("tmux")
             .args(["show-options", "-gv", option_name.value()])
             .stderr(Stdio::null())
@@ -157,7 +175,7 @@ impl Client for TmuxClient {
         Ok(OptionValue::new(value))
     }
 
-    fn set_option(&mut self, option_name: OptionName, option_value: OptionValue) {
+    fn set_option(&mut self, option_name: &OptionName, option_value: &OptionValue) {
         let (_, _) = (option_name, option_value);
         todo!()
     }
@@ -170,7 +188,7 @@ impl Client for TmuxClient {
                 "-c",
                 directory,
                 "-s",
-                &session_id.to_id().to_string(),
+                &session_id.to_string(),
             ])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -179,7 +197,7 @@ impl Client for TmuxClient {
 
     fn switch_to_session(&mut self, session_id: &SessionId) {
         let _ = Command::new("tmux")
-            .args(["switch-client", "-t", &session_id.to_id().to_string()])
+            .args(["switch-client", "-t", &session_id.to_string()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
@@ -187,7 +205,7 @@ impl Client for TmuxClient {
 
     fn has_session(&mut self, session_id: &SessionId) -> bool {
         let output = Command::new("tmux")
-            .args(["has-session", "-t", &session_id.to_id().to_string()])
+            .args(["has-session", "-t", &session_id.to_string()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status();
@@ -200,24 +218,18 @@ impl Client for TmuxClient {
 
     fn new_window(&mut self, session_id: &SessionId, directory: &str) {
         let _ = Command::new("tmux")
-            .args([
-                "new-window",
-                "-c",
-                directory,
-                "-t",
-                &session_id.to_id().to_string(),
-            ])
+            .args(["new-window", "-c", directory, "-t", &session_id.to_string()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
     }
 
-    fn rename_window(&mut self, window_id: WindowID, window_name: WindowName) {
+    fn rename_window(&mut self, window_id: &WindowID, window_name: &WindowName) {
         let _ = Command::new("tmux")
             .args([
                 "rename-window",
                 "-t",
-                &window_id.to_id().to_string(),
+                &window_id.to_string(),
                 window_name.value(),
             ])
             .stdout(Stdio::null())
@@ -225,50 +237,44 @@ impl Client for TmuxClient {
             .output();
     }
 
-    fn new_pane(&mut self, window_id: WindowID, directory: &str) {
+    fn new_pane(&mut self, window_id: &WindowID, directory: &str) {
         let _ = Command::new("tmux")
             .args([
                 "split-window",
                 "-c",
                 directory,
                 "-t",
-                &window_id.to_id().to_string(),
+                &window_id.to_string(),
             ])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
     }
 
-    fn select_pane(&mut self, pane_id: PaneID) {
-        let window_id = pane_id.0.clone();
+    fn select_pane(&mut self, pane_id: &PaneID) {
+        let window_id = pane_id.0.to_owned();
         let _ = Command::new("tmux")
-            .args(["select-window", "-t", &window_id.to_id().to_string()])
+            .args(["select-window", "-t", &window_id.to_string()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
 
         let _ = Command::new("tmux")
-            .args(["select-pane", "-t", &pane_id.to_id().to_string()])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .output();
-    }
-
-    fn send_keys(&mut self, pane_id: PaneID, keys: Keys) {
-        let _ = Command::new("tmux")
-            .args([
-                "send-keys",
-                "-t",
-                &pane_id.to_id().to_string(),
-                keys.value(),
-                "C-m",
-            ])
+            .args(["select-pane", "-t", &pane_id.to_string()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .output();
     }
 
-    fn use_layout(&mut self, layout: Layout) {
+    fn send_keys(&mut self, pane_id: &PaneID, keys: Keys) {
+        let _ = Command::new("tmux")
+            .args(["send-keys", "-t", &pane_id.to_string(), keys.value(), "C-m"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .output();
+    }
+
+    fn use_layout(&mut self, layout: &Layout) {
         let _ = layout;
         todo!()
     }
