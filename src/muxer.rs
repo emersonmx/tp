@@ -66,7 +66,7 @@ impl<C: Client> Muxer<C> {
                 let pidx = self.base_pane_id + pid;
                 let pane_id = PaneID::new(&window_id, pidx.to_string());
                 if pane.focus {
-                    focus_pane = Some(pane_id.to_owned());
+                    focus_pane = Some(pane_id.clone());
                 }
 
                 if pid > 0 {
@@ -90,7 +90,7 @@ impl<C: Client> Muxer<C> {
         self.client.switch_to_session(&session_id);
 
         Ok(Output {
-            session_name: session.name.to_owned(),
+            session_name: session.name.clone(),
             is_new_session: true,
             windows,
         })

@@ -16,7 +16,7 @@ impl Display for Id {
 
 impl From<&SessionId> for Id {
     fn from(value: &SessionId) -> Self {
-        Id(value.0.to_owned())
+        Id(value.0.clone())
     }
 }
 
@@ -52,7 +52,7 @@ pub struct WindowID(SessionId, String);
 
 impl WindowID {
     pub fn new(session_id: &SessionId, window_id: impl Into<String>) -> Self {
-        Self(session_id.to_owned(), window_id.into())
+        Self(session_id.clone(), window_id.into())
     }
 }
 
@@ -67,7 +67,7 @@ pub struct PaneID(WindowID, String);
 
 impl PaneID {
     pub fn new(window_id: &WindowID, pane_id: impl Into<String>) -> Self {
-        Self(window_id.to_owned(), pane_id.into())
+        Self(window_id.clone(), pane_id.into())
     }
 }
 
@@ -252,7 +252,7 @@ impl Client for TmuxClient {
     }
 
     fn select_pane(&mut self, pane_id: &PaneID) {
-        let window_id = pane_id.0.to_owned();
+        let window_id = pane_id.0.clone();
         let _ = Command::new("tmux")
             .args(["select-window", "-t", &window_id.to_string()])
             .stdout(Stdio::null())
