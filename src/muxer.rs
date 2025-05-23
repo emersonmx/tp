@@ -51,7 +51,7 @@ impl<C: Client> Muxer<C> {
         for (widx, window) in session.windows.iter().enumerate() {
             let widx = self.base_window_id + widx;
             let window_id = WindowID::new(&session_id, widx.to_string());
-            if widx > 0 {
+            if widx > 1 {
                 self.client.new_window(&session_id, base_directory);
             }
 
@@ -69,7 +69,7 @@ impl<C: Client> Muxer<C> {
                     focus_pane = Some(pane_id.to_owned());
                 }
 
-                if pidx > 0 {
+                if pidx > 1 {
                     self.client.new_pane(&window_id, base_directory);
                 }
 
