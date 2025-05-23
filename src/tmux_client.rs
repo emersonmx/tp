@@ -102,6 +102,7 @@ pub enum Error {
     OptionNotFound(String),
 }
 
+#[allow(dead_code)]
 pub trait Client {
     fn get_option(&mut self, option_name: OptionName) -> Result<OptionValue, Error>;
     fn set_option(&mut self, option_name: OptionName, option_value: OptionValue);
