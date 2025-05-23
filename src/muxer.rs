@@ -1,6 +1,6 @@
 use crate::{
     config::Session,
-    tmux_client::{Client, Keys, OptionName, PaneID, SessionId, WindowID, WindowName},
+    tmux_client::{Client, Keys, OptionName, PaneID, SessionId, TmuxClient, WindowID, WindowName},
 };
 use thiserror::Error;
 
@@ -10,20 +10,20 @@ pub enum Error {
     BaseIdsError(String),
 }
 
-pub struct Muxer<C: Client> {
-    client: C,
-    base_window_id: usize,
-    base_pane_id: usize,
-}
-
 pub struct Output {
     pub session_name: String,
     pub is_new_session: bool,
     pub windows: Vec<(usize, Vec<usize>)>,
 }
 
+struct Muxer<C: Client> {
+    client: C,
+    base_window_id: usize,
+    base_pane_id: usize,
+}
+
 impl<C: Client> Muxer<C> {
-    pub fn new(client: C) -> Self {
+    fn new(client: C) -> Self {
         Self {
             client,
             base_window_id: 0,
@@ -31,7 +31,7 @@ impl<C: Client> Muxer<C> {
         }
     }
 
-    pub fn apply(&mut self, session: Session) -> Result<Output, Error> {
+    fn apply(&mut self, session: Session) -> Result<Output, Error> {
         let session_id = SessionId::new(&session.name);
         let base_directory = session.directory.to_str().unwrap_or(".");
         let mut windows = vec![];
@@ -111,6 +111,12 @@ impl<C: Client> Muxer<C> {
             .map_err(|e| Error::BaseIdsError(format!("{}", e)))?;
         Ok(value)
     }
+}
+
+pub fn apply(session: Session) -> Result<Output, Error> {
+    let client: TmuxClient = Default::default();
+    let mut runner = Muxer::new(client);
+    runner.apply(session)
 }
 
 #[cfg(test)]
