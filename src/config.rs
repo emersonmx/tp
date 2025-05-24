@@ -31,6 +31,8 @@ pub struct Session {
 pub struct Window {
     #[serde(default)]
     pub name: Option<String>,
+    #[serde(default)]
+    pub directory: Option<PathBuf>,
     #[serde(default = "default_panes")]
     pub panes: Vec<Pane>,
 }
@@ -39,6 +41,8 @@ pub struct Window {
 pub struct Pane {
     #[serde(default)]
     pub focus: bool,
+    #[serde(default)]
+    pub directory: Option<PathBuf>,
     #[serde(default)]
     pub command: Option<String>,
 }
@@ -50,6 +54,7 @@ fn default_directory() -> PathBuf {
 fn default_windows() -> Vec<Window> {
     vec![Window {
         name: None,
+        directory: None,
         panes: default_panes(),
     }]
 }
@@ -75,8 +80,10 @@ pub fn new_session(name: impl Into<String>) -> Result<PathBuf, Error> {
         directory: Some(default_directory()),
         windows: vec![Window {
             name: Some("shell".to_string()),
+            directory: None,
             panes: vec![Pane {
                 focus: true,
+                directory: None,
                 command: Some("echo 'Hello :)'".to_string()),
             }],
         }],
