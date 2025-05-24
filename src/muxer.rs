@@ -33,7 +33,12 @@ impl<C: Client> Muxer<C> {
 
     fn apply(&mut self, session: &Session) -> Result<Output, Error> {
         let session_id = SessionId::new(&session.name);
-        let base_directory = session.directory.to_str().unwrap_or(".");
+        let session_directory = session
+            .directory
+            .as_ref()
+            .and_then(|d| d.to_str())
+            .unwrap_or(".")
+            .to_owned();
         let mut windows = vec![];
         if self.client.has_session(&session_id) {
             self.client.switch_to_session(&session_id);
@@ -45,14 +50,14 @@ impl<C: Client> Muxer<C> {
         }
 
         self.setup_base_ids()?;
-        self.client.new_session(&session_id, base_directory);
+        self.client.new_session(&session_id, &session_directory);
 
         let mut focus_pane: Option<PaneID> = None;
         for (wid, window) in session.windows.iter().enumerate() {
             let widx = self.base_window_id + wid;
             let window_id = WindowID::new(&session_id, widx.to_string());
             if wid > 0 {
-                self.client.new_window(&session_id, base_directory);
+                self.client.new_window(&session_id, &session_directory);
             }
 
             if let Some(window_name) = &window.name {
@@ -69,7 +74,7 @@ impl<C: Client> Muxer<C> {
                 }
 
                 if pid > 0 {
-                    self.client.new_pane(&window_id, base_directory);
+                    self.client.new_pane(&window_id, &session_directory);
                 }
 
                 if let Some(cmd) = &pane.command {

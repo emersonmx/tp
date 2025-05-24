@@ -1,12 +1,11 @@
 use std::{
-    env::{self},
-    fs, io,
-    path::PathBuf,
+    env, fs, io,
+    path::{Path, PathBuf},
     vec,
 };
 use thiserror::Error;
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -22,11 +21,8 @@ pub enum Error {
 #[serde(deny_unknown_fields)]
 pub struct Session {
     pub name: String,
-    #[serde(
-        default = "default_directory",
-        deserialize_with = "deserialize_directory"
-    )]
-    pub directory: PathBuf,
+    #[serde(default)]
+    pub directory: Option<PathBuf>,
     #[serde(default = "default_windows")]
     pub windows: Vec<Window>,
 }
@@ -62,28 +58,21 @@ fn default_panes() -> Vec<Pane> {
     vec![Pane::default()]
 }
 
-fn deserialize_directory<'de, D>(deserializer: D) -> Result<PathBuf, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value = String::deserialize(deserializer)?;
-    let expanded = expand_tilde(&value);
-    Ok(PathBuf::from(expanded))
-}
-
-fn expand_tilde(path: &str) -> String {
-    if let Some(stripped) = path.strip_prefix("~/") {
-        if let Ok(home) = env::var("HOME") {
-            return format!("{}/{}", home.trim_end_matches('/'), stripped);
-        }
-    }
-    path.to_string()
+fn expand_tilde(path: &Path) -> PathBuf {
+    path.strip_prefix("~/")
+        .ok()
+        .and_then(|suffix| {
+            env::var("HOME")
+                .ok()
+                .map(|home_str| PathBuf::from(home_str).join(suffix))
+        })
+        .unwrap_or(path.to_owned())
 }
 
 pub fn new_session(name: impl Into<String>) -> Result<PathBuf, Error> {
     let session = Session {
         name: name.into(),
-        directory: default_directory(),
+        directory: Some(default_directory()),
         windows: vec![Window {
             name: Some("shell".to_string()),
             panes: vec![Pane {
@@ -106,8 +95,12 @@ pub fn load_session(name: impl AsRef<str>) -> Result<Session, Error> {
     let dir = sessions_dir().ok_or(Error::InvalidSessionDirectory)?;
     let path = dir.join(format!("{}.yaml", name.as_ref())).canonicalize()?;
     let content = fs::read_to_string(path)?;
-    let session = serde_yaml::from_str(&content)?;
-    Ok(session)
+    let session: Session = serde_yaml::from_str(&content)?;
+    let expanded_directory = session.directory.as_ref().map(|d| expand_tilde(d));
+    Ok(Session {
+        directory: expanded_directory,
+        ..session
+    })
 }
 
 fn sessions_dir() -> Option<PathBuf> {
@@ -151,7 +144,7 @@ mod tests {
         let session: Session = serde_yaml::from_str(content).unwrap();
 
         assert_eq!(session.name, "simple-test");
-        assert_eq!(session.directory, PathBuf::from("."));
+        assert_eq!(session.directory, None);
     }
 
     #[test]
@@ -277,7 +270,7 @@ mod tests {
                 serde_yaml::from_str(&content).expect("Failed to deserialize created session");
 
             assert_eq!(session.name, session_name);
-            assert_eq!(session.directory, PathBuf::from("."));
+            assert_eq!(session.directory, Some(".".into()));
             assert_eq!(session.windows.len(), 1);
             assert_eq!(session.windows[0].name, Some("shell".to_string()));
             assert_eq!(session.windows[0].panes.len(), 1);
