@@ -58,7 +58,6 @@ impl<C: Client> Muxer<C> {
 
     fn apply(&mut self, session: &Session) -> Result<Output, Error> {
         let session_id = SessionId::new(&session.name);
-        let session_directory = directory_to_string(session.directory.clone());
         let mut windows = vec![];
         if self.client.has_session(&session_id) {
             self.client.switch_to_session(&session_id);
@@ -70,6 +69,8 @@ impl<C: Client> Muxer<C> {
         }
 
         self.setup_base_ids()?;
+
+        let session_directory = directory_to_string(session.directory.clone());
         self.client.new_session(&session_id, &session_directory);
 
         let mut focus_pane: Option<PaneID> = None;
