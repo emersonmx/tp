@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{
     config::Session,
     tmux_client::{Client, Keys, OptionName, PaneID, SessionId, TmuxClient, WindowID, WindowName},
@@ -22,6 +24,14 @@ struct Muxer<C: Client> {
     base_pane_id: usize,
 }
 
+fn directory_to_string(directory: Option<PathBuf>) -> String {
+    directory
+        .as_ref()
+        .and_then(|d| d.to_str())
+        .unwrap_or(".")
+        .to_owned()
+}
+
 impl<C: Client> Muxer<C> {
     fn new(client: C) -> Self {
         Self {
@@ -33,12 +43,7 @@ impl<C: Client> Muxer<C> {
 
     fn apply(&mut self, session: &Session) -> Result<Output, Error> {
         let session_id = SessionId::new(&session.name);
-        let session_directory = session
-            .directory
-            .as_ref()
-            .and_then(|d| d.to_str())
-            .unwrap_or(".")
-            .to_owned();
+        let session_directory = directory_to_string(session.directory.clone());
         let mut windows = vec![];
         if self.client.has_session(&session_id) {
             self.client.switch_to_session(&session_id);
