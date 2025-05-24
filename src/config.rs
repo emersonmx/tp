@@ -33,6 +33,7 @@ pub struct Session {
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Window {
+    #[serde(default)]
     pub name: Option<String>,
     #[serde(default = "default_panes")]
     pub panes: Vec<Pane>,
