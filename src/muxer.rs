@@ -55,8 +55,7 @@ impl<C: Client> Muxer<C> {
                 self.client.new_window(&session_id, base_directory);
             }
 
-            let window_name = window.name.clone().unwrap_or("".to_string());
-            if !window_name.is_empty() {
+            if let Some(window_name) = &window.name {
                 self.client
                     .rename_window(&window_id, &WindowName::new(window_name));
             }
