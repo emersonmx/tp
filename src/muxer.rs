@@ -70,15 +70,32 @@ impl<C: Client> Muxer<C> {
 
         self.setup_base_ids()?;
 
-        let session_directory = directory_to_string(session.directory.clone());
-        self.client.new_session(&session_id, &session_directory);
+        let mut initial_directory = session.directory.clone();
+        if let Some(window) = session.windows.first() {
+            initial_directory = window
+                .directory
+                .clone()
+                .or_else(|| initial_directory.clone());
+            if let Some(pane) = window.panes.first() {
+                initial_directory = pane.directory.clone().or_else(|| initial_directory.clone())
+            }
+        }
+        self.client
+            .new_session(&session_id, &directory_to_string(initial_directory));
 
         let mut focus_pane: Option<PaneID> = None;
+        let base_dir = session.directory.clone();
         for (wid, window) in session.windows.iter().enumerate() {
             let widx = self.base_window_id + wid;
             let window_id = WindowID::new(&session_id, widx.to_string());
+            let base_dir = window.directory.clone().or_else(|| base_dir.clone());
             if wid > 0 {
-                self.client.new_window(&session_id, &session_directory);
+                let mut base_dir = base_dir.clone();
+                if let Some(pane) = window.panes.first() {
+                    base_dir = pane.directory.clone().or_else(|| base_dir.clone());
+                }
+                self.client
+                    .new_window(&session_id, &directory_to_string(base_dir.clone()));
             }
 
             if let Some(window_name) = &window.name {
@@ -90,12 +107,14 @@ impl<C: Client> Muxer<C> {
             for (pid, pane) in window.panes.iter().enumerate() {
                 let pidx = self.base_pane_id + pid;
                 let pane_id = PaneID::new(&window_id, pidx.to_string());
+                let base_dir = pane.directory.clone().or_else(|| base_dir.clone());
                 if pane.focus {
                     focus_pane = Some(pane_id.clone());
                 }
 
                 if pid > 0 {
-                    self.client.new_pane(&window_id, &session_directory);
+                    self.client
+                        .new_pane(&window_id, &directory_to_string(base_dir.clone()));
                 }
 
                 if let Some(cmd) = &pane.command {
