@@ -70,30 +70,33 @@ impl<C: Client> Muxer<C> {
 
         self.setup_base_ids()?;
 
-        let mut initial_directory = session.directory.clone();
-        if let Some(window) = session.windows.first() {
-            initial_directory = window
-                .directory
-                .clone()
-                .or_else(|| initial_directory.clone());
-            if let Some(pane) = window.panes.first() {
-                initial_directory = pane.directory.clone().or_else(|| initial_directory.clone())
-            }
-        }
-        self.client
-            .new_session(&session_id, &directory_to_string(initial_directory));
+        let initial_dir = directory_to_string(
+            session
+                .windows
+                .first()
+                .and_then(|window| {
+                    window
+                        .panes
+                        .first()
+                        .and_then(|pane| pane.directory.clone())
+                        .or_else(|| window.directory.clone())
+                })
+                .or_else(|| session.directory.clone()),
+        );
+        self.client.new_session(&session_id, &initial_dir);
 
-        let mut focus_pane: Option<PaneID> = None;
         let base_dir = session.directory.clone();
+        let mut focus_pane: Option<PaneID> = None;
         for (wid, window) in session.windows.iter().enumerate() {
             let widx = self.base_window_id + wid;
             let window_id = WindowID::new(&session_id, widx.to_string());
             let base_dir = window.directory.clone().or_else(|| base_dir.clone());
             if wid > 0 {
-                let mut base_dir = base_dir.clone();
-                if let Some(pane) = window.panes.first() {
-                    base_dir = pane.directory.clone().or_else(|| base_dir.clone());
-                }
+                let base_dir = window
+                    .panes
+                    .first()
+                    .and_then(|pane| pane.directory.clone())
+                    .or_else(|| base_dir.clone());
                 self.client
                     .new_window(&session_id, &directory_to_string(base_dir.clone()));
             }
