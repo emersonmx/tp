@@ -1,8 +1,4 @@
-use std::{
-    env, fs, io,
-    path::{Path, PathBuf},
-    vec,
-};
+use std::{env, fs, io, path::PathBuf, vec};
 use thiserror::Error;
 
 use serde::{Deserialize, Serialize};
@@ -63,17 +59,6 @@ fn default_panes() -> Vec<Pane> {
     vec![Pane::default()]
 }
 
-fn expand_tilde(path: &Path) -> PathBuf {
-    path.strip_prefix("~/")
-        .ok()
-        .and_then(|suffix| {
-            env::var("HOME")
-                .ok()
-                .map(|home_str| PathBuf::from(home_str).join(suffix))
-        })
-        .unwrap_or(path.to_owned())
-}
-
 pub fn new_session(name: impl Into<String>) -> Result<PathBuf, Error> {
     let session = Session {
         name: name.into(),
@@ -103,11 +88,7 @@ pub fn load_session(name: impl AsRef<str>) -> Result<Session, Error> {
     let path = dir.join(format!("{}.yaml", name.as_ref())).canonicalize()?;
     let content = fs::read_to_string(path)?;
     let session: Session = serde_yaml::from_str(&content)?;
-    let expanded_directory = session.directory.as_ref().map(|d| expand_tilde(d));
-    Ok(Session {
-        directory: expanded_directory,
-        ..session
-    })
+    Ok(session)
 }
 
 fn sessions_dir() -> Option<PathBuf> {

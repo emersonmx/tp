@@ -1,4 +1,7 @@
-use std::path::PathBuf;
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     config::Session,
@@ -26,10 +29,22 @@ struct Muxer<C: Client> {
 
 fn directory_to_string(directory: Option<PathBuf>) -> String {
     directory
+        .map(|dir| expand_tilde(&dir))
         .as_ref()
-        .and_then(|d| d.to_str())
+        .and_then(|dir| dir.to_str())
         .unwrap_or(".")
         .to_owned()
+}
+
+fn expand_tilde(path: &Path) -> PathBuf {
+    path.strip_prefix("~/")
+        .ok()
+        .and_then(|suffix| {
+            env::var("HOME")
+                .ok()
+                .map(|home_str| PathBuf::from(home_str).join(suffix))
+        })
+        .unwrap_or(path.to_owned())
 }
 
 impl<C: Client> Muxer<C> {
