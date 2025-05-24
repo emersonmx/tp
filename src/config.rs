@@ -43,10 +43,6 @@ pub struct Pane {
     pub command: Option<String>,
 }
 
-fn default_directory() -> PathBuf {
-    ".".into()
-}
-
 fn default_windows() -> Vec<Window> {
     vec![Window {
         name: None,
@@ -62,7 +58,7 @@ fn default_panes() -> Vec<Pane> {
 pub fn new_session(name: impl Into<String>) -> Result<PathBuf, Error> {
     let session = Session {
         name: name.into(),
-        directory: Some(default_directory()),
+        directory: Some(".".into()),
         windows: vec![Window {
             name: Some("shell".to_string()),
             directory: None,
