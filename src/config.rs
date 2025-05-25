@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{env, fs, io, path::PathBuf, vec};
+use std::{env, fs, io, path::PathBuf};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -86,19 +86,20 @@ impl Session {
         Ok(session)
     }
 
-    pub fn create(name: impl AsRef<str>) -> Result<PathBuf, Error> {
-        let session = Self::load_from_string(format!(
-            r#"
-            name: {}
-            directory: .
-            windows:
-              - name: shell
-                panes:
-                  - focus: true
-                    command: echo 'Hello :)'
-            "#,
-            name.as_ref()
-        ))?;
+    pub fn create(name: impl Into<String>) -> Result<PathBuf, Error> {
+        let session = Self {
+            name: name.into(),
+            directory: Some(".".into()),
+            windows: vec![Window {
+                name: Some("shell".to_string()),
+                panes: vec![Pane {
+                    focus: true,
+                    command: Some("echo 'Hello :)'".to_string()),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+        };
 
         let dir = Self::default_directory().ok_or(Error::InvalidSessionDirectory)?;
         let path = dir.join(format!("{}.{}", session.name, Self::DEFAULT_FILE_EXT));
