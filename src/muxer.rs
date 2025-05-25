@@ -209,9 +209,10 @@ fn resolve_directory(
     pane_dir: &Option<PathBuf>,
 ) -> Option<PathBuf> {
     pane_dir
-        .clone()
-        .or_else(|| window_dir.clone())
-        .or_else(|| session_dir.clone())
+        .as_ref()
+        .or(window_dir.as_ref())
+        .or(session_dir.as_ref())
+        .map(|p| p.to_owned())
 }
 
 impl<C: Client> Muxer<C> {
