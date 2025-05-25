@@ -29,12 +29,13 @@ struct Muxer<C: Client> {
 
 fn directory_to_string(directory: Option<PathBuf>) -> String {
     directory
-        .map(|dir| expand_tilde(&dir))
+        .map(expand_tilde)
         .and_then(|dir| dir.to_str().map(|s| s.to_owned()))
         .unwrap_or_else(|| ".".to_owned())
 }
 
-fn expand_tilde(path: &Path) -> PathBuf {
+fn expand_tilde(path: impl AsRef<Path>) -> PathBuf {
+    let path = path.as_ref();
     path.strip_prefix("~/")
         .ok()
         .and_then(|suffix| {
@@ -42,7 +43,7 @@ fn expand_tilde(path: &Path) -> PathBuf {
                 .ok()
                 .map(|home_str| PathBuf::from(home_str).join(suffix))
         })
-        .unwrap_or(path.to_owned())
+        .unwrap_or_else(|| path.to_owned())
 }
 
 fn get_effective_directory(
