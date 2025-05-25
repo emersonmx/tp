@@ -30,10 +30,8 @@ struct Muxer<C: Client> {
 fn directory_to_string(directory: Option<PathBuf>) -> String {
     directory
         .map(|dir| expand_tilde(&dir))
-        .as_ref()
-        .and_then(|dir| dir.to_str())
-        .unwrap_or(".")
-        .to_owned()
+        .and_then(|dir| dir.to_str().map(|s| s.to_owned()))
+        .unwrap_or_else(|| ".".to_owned())
 }
 
 fn expand_tilde(path: &Path) -> PathBuf {
@@ -45,6 +43,17 @@ fn expand_tilde(path: &Path) -> PathBuf {
                 .map(|home_str| PathBuf::from(home_str).join(suffix))
         })
         .unwrap_or(path.to_owned())
+}
+
+fn get_effective_directory(
+    session_dir: &Option<PathBuf>,
+    window_dir: &Option<PathBuf>,
+    pane_dir: &Option<PathBuf>,
+) -> Option<PathBuf> {
+    pane_dir
+        .clone()
+        .or_else(|| window_dir.clone())
+        .or_else(|| session_dir.clone())
 }
 
 impl<C: Client> Muxer<C> {
@@ -70,37 +79,32 @@ impl<C: Client> Muxer<C> {
 
         self.setup_base_ids()?;
 
-        let initial_dir = directory_to_string(
-            session
-                .windows
-                .first()
-                .and_then(|window| {
-                    window
-                        .panes
-                        .first()
-                        .and_then(|pane| pane.directory.clone())
-                        .or_else(|| window.directory.clone())
-                })
-                .or_else(|| session.directory.clone()),
+        let first_window = session.windows.first();
+        let initial_dir = get_effective_directory(
+            &session.directory,
+            &first_window.and_then(|window| window.directory.clone()),
+            &first_window
+                .and_then(|window| window.panes.first().and_then(|pane| pane.directory.clone())),
         );
+        let initial_dir = directory_to_string(initial_dir);
         self.client.new_session(&session_id, &initial_dir);
 
-        let base_dir = session.directory.clone();
+        let session_dir = session.directory.clone();
         let mut focus_pane: Option<PaneID> = None;
         for (wid, window) in session.windows.iter().enumerate() {
-            let widx = self.base_window_id + wid;
-            let window_id = WindowID::new(&session_id, widx.to_string());
-            let base_dir = window.directory.clone().or_else(|| base_dir.clone());
+            let window_dir = get_effective_directory(&session_dir, &window.directory, &None);
             if wid > 0 {
-                let base_dir = window
-                    .panes
-                    .first()
-                    .and_then(|pane| pane.directory.clone())
-                    .or_else(|| base_dir.clone());
+                let initial_dir = get_effective_directory(
+                    &session_dir,
+                    &window_dir,
+                    &window.panes.first().and_then(|pane| pane.directory.clone()),
+                );
                 self.client
-                    .new_window(&session_id, &directory_to_string(base_dir.clone()));
+                    .new_window(&session_id, &directory_to_string(initial_dir));
             }
 
+            let widx = self.base_window_id + wid;
+            let window_id = WindowID::new(&session_id, widx.to_string());
             if let Some(window_name) = &window.name {
                 self.client
                     .rename_window(&window_id, &WindowName::new(window_name));
@@ -110,14 +114,14 @@ impl<C: Client> Muxer<C> {
             for (pid, pane) in window.panes.iter().enumerate() {
                 let pidx = self.base_pane_id + pid;
                 let pane_id = PaneID::new(&window_id, pidx.to_string());
-                let base_dir = pane.directory.clone().or_else(|| base_dir.clone());
                 if pane.focus {
                     focus_pane = Some(pane_id.clone());
                 }
 
+                let pane_dir = get_effective_directory(&session_dir, &window_dir, &pane.directory);
                 if pid > 0 {
                     self.client
-                        .new_pane(&window_id, &directory_to_string(base_dir.clone()));
+                        .new_pane(&window_id, &directory_to_string(pane_dir));
                 }
 
                 if let Some(cmd) = &pane.command {
