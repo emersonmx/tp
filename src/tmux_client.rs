@@ -16,28 +16,28 @@ impl Display for Id {
 
 impl From<&SessionId> for Id {
     fn from(value: &SessionId) -> Self {
-        Id(value.0.clone())
+        value.0.clone()
     }
 }
 
 impl From<&WindowID> for Id {
     fn from(value: &WindowID) -> Self {
-        Id(format!("{}:{}", Into::<Id>::into(&value.0), value.1))
+        Id(format!("{}:{}", &value.0, value.1))
     }
 }
 
 impl From<&PaneID> for Id {
     fn from(value: &PaneID) -> Self {
-        Id(format!("{}.{}", Into::<Id>::into(&value.0), value.1))
+        Id(format!("{}.{}", &value.0, value.1))
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SessionId(String);
+pub struct SessionId(Id);
 
 impl SessionId {
     pub fn new(session_id: impl Into<String>) -> Self {
-        Self(session_id.into())
+        Self(Id(session_id.into()))
     }
 }
 
@@ -48,11 +48,11 @@ impl Display for SessionId {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct WindowID(SessionId, String);
+pub struct WindowID(SessionId, Id);
 
 impl WindowID {
     pub fn new(session_id: &SessionId, window_id: impl Into<String>) -> Self {
-        Self(session_id.clone(), window_id.into())
+        Self(session_id.clone(), Id(window_id.into()))
     }
 }
 
@@ -63,11 +63,11 @@ impl Display for WindowID {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct PaneID(WindowID, String);
+pub struct PaneID(WindowID, Id);
 
 impl PaneID {
     pub fn new(window_id: &WindowID, pane_id: impl Into<String>) -> Self {
-        Self(window_id.clone(), pane_id.into())
+        Self(window_id.clone(), Id(pane_id.into()))
     }
 }
 
