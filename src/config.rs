@@ -22,6 +22,26 @@ pub struct Session {
     pub windows: Vec<Window>,
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Window {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub directory: Option<PathBuf>,
+    #[serde(default = "default_panes")]
+    pub panes: Vec<Pane>,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Pane {
+    #[serde(default)]
+    pub focus: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub directory: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+}
+
 fn default_windows() -> Vec<Window> {
     vec![Window {
         name: None,
@@ -107,26 +127,6 @@ impl Session {
         sessions.sort();
         sessions
     }
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Window {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub directory: Option<PathBuf>,
-    #[serde(default = "default_panes")]
-    pub panes: Vec<Pane>,
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Pane {
-    #[serde(default)]
-    pub focus: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub directory: Option<PathBuf>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub command: Option<String>,
 }
 
 #[cfg(test)]
