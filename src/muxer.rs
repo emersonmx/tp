@@ -341,7 +341,7 @@ mod tests {
 
     #[test]
     fn switch_to_session_if_exists() {
-        let session: Session = serde_yaml::from_str("name: test").unwrap();
+        let session: Session = Session::load_from_string("name: test").unwrap();
         let mut mock_client = MockClient::new();
         mock_client.expect_has_session().return_const(true);
         mock_client.expect_switch_to_session().return_const(());
@@ -355,7 +355,7 @@ mod tests {
 
     #[test]
     fn create_a_session_if_not_exists() {
-        let session: Session = serde_yaml::from_str("name: test").unwrap();
+        let session: Session = Session::load_from_string("name: test").unwrap();
         let mock_client = make_mock_client();
         let mut runner = Muxer::new(mock_client);
 
@@ -367,7 +367,7 @@ mod tests {
 
     #[test]
     fn base_ids_starts_at_zero() {
-        let session: Session = serde_yaml::from_str("name: test").unwrap();
+        let session: Session = Session::load_from_string("name: test").unwrap();
         let mock_client = make_mock_client();
         let mut runner = Muxer::new(mock_client);
 
