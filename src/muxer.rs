@@ -1,18 +1,172 @@
+use crate::config::Session;
 use std::{
     env,
+    fmt::Display,
     path::{Path, PathBuf},
 };
-
-use crate::{
-    config::Session,
-    tmux_client::{Client, Keys, OptionName, PaneID, SessionId, TmuxClient, WindowID, WindowName},
-};
 use thiserror::Error;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Id(String);
+
+impl Display for Id {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionId(Id);
+
+impl SessionId {
+    pub fn new(session_id: impl Into<String>) -> Self {
+        Self(Id(session_id.into()))
+    }
+
+    pub fn id(&self) -> &Id {
+        &self.0
+    }
+}
+
+impl Display for SessionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.id())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WindowID(SessionId, Id);
+
+impl WindowID {
+    pub fn new(session_id: &SessionId, window_id: impl Into<String>) -> Self {
+        let window_id = Id(format!("{}:{}", session_id, window_id.into()));
+        Self(session_id.clone(), window_id)
+    }
+
+    pub fn session_id(&self) -> &Id {
+        self.0.id()
+    }
+
+    pub fn id(&self) -> &Id {
+        &self.1
+    }
+}
+
+impl Display for WindowID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.id())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PaneID(WindowID, Id);
+
+impl PaneID {
+    pub fn new(window_id: &WindowID, pane_id: impl Into<String>) -> Self {
+        let pane_id = Id(format!("{}.{}", window_id.clone(), pane_id.into()));
+        Self(window_id.clone(), pane_id)
+    }
+
+    pub fn session_id(&self) -> &Id {
+        self.0.session_id()
+    }
+
+    pub fn window_id(&self) -> &Id {
+        self.0.id()
+    }
+
+    pub fn id(&self) -> &Id {
+        &self.1
+    }
+}
+
+impl Display for PaneID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.id())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WindowName(String);
+
+impl WindowName {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self(name.into())
+    }
+
+    pub fn value(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OptionName(String);
+
+impl OptionName {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self(name.into())
+    }
+
+    pub fn value(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OptionValue(String);
+
+impl OptionValue {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self(name.into())
+    }
+
+    pub fn value(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Layout(String);
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Keys(String);
+
+impl Keys {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self(name.into())
+    }
+
+    pub fn value(&self) -> &str {
+        &self.0
+    }
+}
 
 #[derive(Error, PartialEq, Debug)]
 pub enum Error {
     #[error("unable to setup base ids: {0}")]
     BaseIdsError(String),
+    #[error("option `{0}` not found")]
+    OptionNotFound(String),
+}
+
+#[allow(dead_code)]
+pub trait Client {
+    fn get_option(&mut self, option_name: &OptionName) -> Result<OptionValue, Error>;
+    fn set_option(&mut self, option_name: &OptionName, option_value: &OptionValue);
+
+    fn new_session(&mut self, session_id: &SessionId, directory: &str);
+    fn switch_to_session(&mut self, session_id: &SessionId);
+    fn has_session(&mut self, session_id: &SessionId) -> bool;
+
+    fn new_window(&mut self, session_id: &SessionId, directory: &str);
+    fn rename_window(&mut self, window_id: &WindowID, window_name: &WindowName);
+
+    fn new_pane(&mut self, window_id: &WindowID, directory: &str);
+    fn select_pane(&mut self, pane_id: &PaneID);
+
+    fn send_keys(&mut self, pane_id: &PaneID, keys: Keys);
+
+    fn use_layout(&mut self, layout: &Layout);
 }
 
 pub struct Output {
@@ -21,7 +175,7 @@ pub struct Output {
     pub windows: Vec<(usize, Vec<usize>)>,
 }
 
-struct Muxer<C: Client> {
+pub struct Muxer<C: Client> {
     client: C,
     base_window_id: usize,
     base_pane_id: usize,
@@ -46,7 +200,7 @@ fn expand_tilde(path: impl AsRef<Path>) -> PathBuf {
         .unwrap_or_else(|| path.to_owned())
 }
 
-fn get_effective_directory(
+fn resolve_directory(
     session_dir: &Option<PathBuf>,
     window_dir: &Option<PathBuf>,
     pane_dir: &Option<PathBuf>,
@@ -58,7 +212,7 @@ fn get_effective_directory(
 }
 
 impl<C: Client> Muxer<C> {
-    fn new(client: C) -> Self {
+    pub fn new(client: C) -> Self {
         Self {
             client,
             base_window_id: 0,
@@ -66,7 +220,7 @@ impl<C: Client> Muxer<C> {
         }
     }
 
-    fn apply(&mut self, session: &Session) -> Result<Output, Error> {
+    pub fn apply(&mut self, session: &Session) -> Result<Output, Error> {
         let session_id = SessionId::new(&session.name);
         let mut windows = vec![];
         if self.client.has_session(&session_id) {
@@ -81,7 +235,7 @@ impl<C: Client> Muxer<C> {
         self.setup_base_ids()?;
 
         let first_window = session.windows.first();
-        let initial_dir = get_effective_directory(
+        let initial_dir = resolve_directory(
             &session.directory,
             &first_window.and_then(|window| window.directory.clone()),
             &first_window
@@ -93,9 +247,9 @@ impl<C: Client> Muxer<C> {
         let session_dir = session.directory.clone();
         let mut focus_pane: Option<PaneID> = None;
         for (wid, window) in session.windows.iter().enumerate() {
-            let window_dir = get_effective_directory(&session_dir, &window.directory, &None);
+            let window_dir = resolve_directory(&session_dir, &window.directory, &None);
             if wid > 0 {
-                let initial_dir = get_effective_directory(
+                let initial_dir = resolve_directory(
                     &session_dir,
                     &window_dir,
                     &window.panes.first().and_then(|pane| pane.directory.clone()),
@@ -119,7 +273,7 @@ impl<C: Client> Muxer<C> {
                     focus_pane = Some(pane_id.clone());
                 }
 
-                let pane_dir = get_effective_directory(&session_dir, &window_dir, &pane.directory);
+                let pane_dir = resolve_directory(&session_dir, &window_dir, &pane.directory);
                 if pid > 0 {
                     self.client
                         .new_pane(&window_id, &directory_to_string(pane_dir));
@@ -166,23 +320,16 @@ impl<C: Client> Muxer<C> {
     }
 }
 
-pub fn apply(session: &Session) -> Result<Output, Error> {
-    let client: TmuxClient = Default::default();
-    let mut runner = Muxer::new(client);
-    runner.apply(session)
-}
-
 #[cfg(test)]
 mod tests {
     use mockall::mock;
 
     use super::*;
-    use crate::tmux_client::*;
 
     mock! {
         Client {}
         impl Client for Client {
-            fn get_option(&mut self, option_name: &OptionName) -> Result<OptionValue, crate::tmux_client::Error>;
+            fn get_option(&mut self, option_name: &OptionName) -> Result<OptionValue, Error>;
             fn set_option(&mut self, option_name: &OptionName, option_value: &OptionValue);
 
             fn new_session(&mut self, session_id: &SessionId, directory: &str);

@@ -1,11 +1,12 @@
 mod cli;
-
-use std::io;
+mod tmux_client;
 
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use cli::Cli;
-use tp::{config, muxer};
+use std::io;
+use tmux_client::TmuxClient;
+use tp::{config, muxer::Muxer};
 
 fn main() -> Result<()> {
     match Cli::parse() {
@@ -22,7 +23,10 @@ fn main() -> Result<()> {
             );
         }
         Cli::Load { session } => {
-            let output = muxer::apply(&session)?;
+            let client: TmuxClient = Default::default();
+            let mut runner = Muxer::new(client);
+
+            let output = runner.apply(&session)?;
             if output.is_new_session {
                 println!("Session {} was created!", output.session_name);
             } else {
