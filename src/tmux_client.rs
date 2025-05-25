@@ -14,24 +14,6 @@ impl Display for Id {
     }
 }
 
-impl From<&SessionId> for Id {
-    fn from(value: &SessionId) -> Self {
-        value.0.clone()
-    }
-}
-
-impl From<&WindowID> for Id {
-    fn from(value: &WindowID) -> Self {
-        Id(format!("{}:{}", &value.0, value.1))
-    }
-}
-
-impl From<&PaneID> for Id {
-    fn from(value: &PaneID) -> Self {
-        Id(format!("{}.{}", &value.0, value.1))
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct SessionId(Id);
 
@@ -39,11 +21,15 @@ impl SessionId {
     pub fn new(session_id: impl Into<String>) -> Self {
         Self(Id(session_id.into()))
     }
+
+    fn to_id(&self) -> Id {
+        self.0.clone()
+    }
 }
 
 impl Display for SessionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", Into::<Id>::into(self))
+        write!(f, "{}", self.to_id())
     }
 }
 
@@ -54,11 +40,15 @@ impl WindowID {
     pub fn new(session_id: &SessionId, window_id: impl Into<String>) -> Self {
         Self(session_id.clone(), Id(window_id.into()))
     }
+
+    fn to_id(&self) -> Id {
+        Id(format!("{}:{}", &self.0, &self.1))
+    }
 }
 
 impl Display for WindowID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", Into::<Id>::into(self))
+        write!(f, "{}", self.to_id())
     }
 }
 
@@ -69,11 +59,15 @@ impl PaneID {
     pub fn new(window_id: &WindowID, pane_id: impl Into<String>) -> Self {
         Self(window_id.clone(), Id(pane_id.into()))
     }
+
+    fn to_id(&self) -> Id {
+        Id(format!("{}.{}", &self.0, &self.1))
+    }
 }
 
 impl Display for PaneID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", Into::<Id>::into(self))
+        write!(f, "{}", self.to_id())
     }
 }
 
