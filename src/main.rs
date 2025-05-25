@@ -6,17 +6,17 @@ use clap::{CommandFactory, Parser};
 use cli::Cli;
 use std::io;
 use tmux_client::TmuxClient;
-use tp::{config, muxer::Muxer};
+use tp::{config::Session, muxer::Muxer};
 
 fn main() -> Result<()> {
     match Cli::parse() {
         Cli::List => {
-            for session in config::list_sessions() {
+            for session in Session::list() {
                 println!("{session}");
             }
         }
         Cli::New { session_name } => {
-            let session_path = config::new_session(session_name)?;
+            let session_path = Session::create(session_name)?;
             println!(
                 "Created new session configuration at: {}",
                 session_path.display()

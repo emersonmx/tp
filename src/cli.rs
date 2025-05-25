@@ -1,6 +1,6 @@
-use crate::config;
 use clap::Parser;
 use clap_complete::Shell;
+use tp::config::{Error, Session};
 
 #[derive(Parser, Debug)]
 #[command(about = "A simple tmux session loader")]
@@ -10,7 +10,7 @@ pub enum Cli {
     /// Load a session
     Load {
         #[arg(value_parser = parser_session_config)]
-        session: config::Session,
+        session: Session,
     },
     /// List sessions
     List,
@@ -22,8 +22,8 @@ pub enum Cli {
     },
 }
 
-fn parser_session_config(value: &str) -> Result<config::Session, config::Error> {
-    config::load_session(value)
+fn parser_session_config(value: &str) -> Result<Session, Error> {
+    Session::load_from_name(value)
 }
 
 #[cfg(test)]
