@@ -153,8 +153,7 @@ mod tests {
     #[test]
     fn read_incorrect_session_file() {
         let content = "parser error";
-        let session: Result<Session, Error> =
-            Session::load_from_string(content).map_err(Error::from);
+        let session: Result<Session, Error> = Session::load_from_string(content);
 
         assert!(matches!(session, Err(Error::UnableToParseConfig(_))));
     }
