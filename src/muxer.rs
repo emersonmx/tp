@@ -1,4 +1,6 @@
 use crate::config::Session;
+#[cfg(test)]
+use mockall::automock;
 use std::{
     env,
     fmt::Display,
@@ -150,6 +152,7 @@ pub enum Error {
 }
 
 #[allow(dead_code)]
+#[cfg_attr(test, automock)]
 pub trait Client {
     fn get_option(&mut self, option_name: &OptionName) -> Result<OptionValue, Error>;
     fn set_option(&mut self, option_name: &OptionName, option_value: &OptionValue);
@@ -322,31 +325,7 @@ impl<C: Client> Muxer<C> {
 
 #[cfg(test)]
 mod tests {
-    use mockall::mock;
-
     use super::*;
-
-    mock! {
-        Client {}
-        impl Client for Client {
-            fn get_option(&mut self, option_name: &OptionName) -> Result<OptionValue, Error>;
-            fn set_option(&mut self, option_name: &OptionName, option_value: &OptionValue);
-
-            fn new_session(&mut self, session_id: &SessionId, directory: &str);
-            fn switch_to_session(&mut self, session_id: &SessionId);
-            fn has_session(&mut self, session_id: &SessionId) -> bool;
-
-            fn new_window(&mut self, session_id: &SessionId, directory: &str);
-            fn rename_window(&mut self, window_id: &WindowID, window_name: &WindowName);
-
-            fn new_pane(&mut self, window_id: &WindowID, directory: &str);
-            fn select_pane(&mut self, pane_id: &PaneID);
-
-            fn send_keys(&mut self, pane_id: &PaneID, keys: Keys);
-
-            fn use_layout(&mut self, layout: &Layout);
-        }
-    }
 
     fn make_mock_client() -> MockClient {
         let mut mock_client = MockClient::new();
