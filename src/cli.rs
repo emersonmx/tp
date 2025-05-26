@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, ValueHint};
 use clap_complete::Shell;
 use tp::config::{Error, Session};
 
@@ -9,7 +9,7 @@ pub enum Cli {
     New { session_name: String },
     /// Load a session
     Load {
-        #[arg(value_parser = parser_session_config)]
+        #[arg(value_parser = parser_session_config, value_hint = ValueHint::Other)]
         session: Session,
     },
     /// List sessions
