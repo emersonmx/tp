@@ -1,10 +1,11 @@
 mod cli;
+mod completions;
 mod tmux_client;
 
 use anyhow::Result;
-use clap::{CommandFactory, Parser};
+use clap::Parser;
 use cli::Cli;
-use std::io;
+use completions::generate;
 use tmux_client::TmuxClient;
 use tp::{config::Session, muxer::Muxer};
 
@@ -36,11 +37,7 @@ fn main() -> Result<()> {
                 );
             }
         }
-        Cli::Completions { shell } => {
-            let mut cmd = Cli::command();
-            let cmd_name = cmd.get_name().to_string();
-            clap_complete::generate(shell, &mut cmd, cmd_name, &mut io::stdout());
-        }
+        Cli::Completions { shell } => generate(shell)?,
     }
 
     Ok(())
