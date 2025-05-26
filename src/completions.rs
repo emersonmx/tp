@@ -50,3 +50,13 @@ _arguments "${_arguments_options[@]}" : \
 '--help[Print help]' \
 ':session:($(tp list))' \"#,
 )];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_generate_zsh_completions() {
+        generate(Shell::Zsh).unwrap();
+    }
+}
