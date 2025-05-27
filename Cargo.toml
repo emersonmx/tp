@@ -1,7 +1,9 @@
 [package]
 name = "tp"
+description = "A command-line tool for managing and loading tmux sessions from configuration files"
 version = "1.0.0"
 edition = "2024"
+authors = ["Emerson Max de Medeiros Silva <emersonmx@gmail.com>"]
 
 [dependencies]
 anyhow = "1.0.97"
