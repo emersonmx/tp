@@ -1,13 +1,13 @@
-mod cli;
-mod completions;
-mod tmux_client;
-
 use anyhow::Result;
 use clap::Parser;
 use cli::Cli;
 use completions::generate;
 use tmux_client::TmuxClient;
 use tp::{config::Session, muxer::Muxer};
+
+mod cli;
+mod completions;
+mod tmux_client;
 
 fn main() -> Result<()> {
     match Cli::parse() {
