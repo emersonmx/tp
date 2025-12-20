@@ -1,7 +1,7 @@
-use std::process::{Command, Stdio};
-use tp::muxer::{
+use crate::muxer::{
     Client, Error, Keys, Layout, OptionName, OptionValue, PaneID, SessionId, WindowID, WindowName,
 };
+use std::process::{Command, Stdio};
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TmuxClient;

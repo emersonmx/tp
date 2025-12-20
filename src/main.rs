@@ -1,12 +1,14 @@
+use crate::{config::Session, muxer::Muxer};
 use anyhow::Result;
 use clap::Parser;
 use cli::Cli;
 use completions::generate;
 use tmux_client::TmuxClient;
-use tp::{config::Session, muxer::Muxer};
 
 mod cli;
 mod completions;
+mod config;
+mod muxer;
 mod tmux_client;
 
 fn main() -> Result<()> {

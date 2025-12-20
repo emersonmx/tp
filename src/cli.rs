@@ -1,6 +1,6 @@
+use crate::config::{Error, Session};
 use clap::Parser;
 use clap_complete::Shell;
-use tp::config::{Error, Session};
 
 #[derive(Parser, Debug)]
 #[command(about = "A simple tmux session loader")]
