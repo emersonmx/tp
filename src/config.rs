@@ -56,12 +56,12 @@ fn default_panes() -> Vec<Pane> {
 
 impl Session {
     const DEFAULT_DIR_ENV: &str = "TP_SESSIONS_DIR";
-    const HOME_ENV: &str = "HOME";
     const DEFAULT_DIR: &str = ".config/tp";
     const DEFAULT_FILE_EXT: &str = "yaml";
 
     pub fn load_from_name(name: impl AsRef<str>) -> Result<Self, Error> {
         let dir = Self::default_directory().ok_or(Error::InvalidSessionDirectory)?;
+
         let path = dir
             .join(format!("{}.{}", name.as_ref(), Self::DEFAULT_FILE_EXT))
             .canonicalize()?;
@@ -74,11 +74,7 @@ impl Session {
         env::var(Self::DEFAULT_DIR_ENV)
             .ok()
             .map(PathBuf::from)
-            .or_else(|| {
-                env::var(Self::HOME_ENV)
-                    .ok()
-                    .map(|home| PathBuf::from(home).join(Self::DEFAULT_DIR))
-            })
+            .or_else(|| env::home_dir().map(|home| home.join(Self::DEFAULT_DIR)))
     }
 
     pub fn load_from_string(content: impl AsRef<str>) -> Result<Self, Error> {
@@ -134,6 +130,7 @@ impl Session {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+    const HOME_ENV: &str = "HOME";
 
     #[test]
     fn read_simple_session_file() {
@@ -161,10 +158,10 @@ mod tests {
 
     #[test]
     fn load_session_invalid_dir() {
-        temp_env::with_vars_unset([Session::HOME_ENV, Session::DEFAULT_DIR_ENV], || {
+        temp_env::with_var(Session::DEFAULT_DIR_ENV, Some("invalid-dir"), || {
             let session = Session::load_from_name("a-session-path");
 
-            assert!(matches!(session, Err(Error::InvalidSessionDirectory)));
+            assert!(matches!(session, Err(Error::UnableToLoad(_))));
         });
     }
 
@@ -244,7 +241,7 @@ mod tests {
 
     #[test]
     fn list_sessions_when_sessions_dir_not_exists() {
-        temp_env::with_vars_unset([Session::HOME_ENV, Session::DEFAULT_DIR_ENV], || {
+        temp_env::with_var(Session::DEFAULT_DIR_ENV, Some("invalid-dir"), || {
             let sessions = Session::list();
             assert!(sessions.is_empty());
         });
@@ -307,9 +304,9 @@ mod tests {
 
     #[test]
     fn when_new_session_invalid_dir() {
-        temp_env::with_vars_unset([Session::HOME_ENV, Session::DEFAULT_DIR_ENV], || {
+        temp_env::with_var(Session::DEFAULT_DIR_ENV, Some("invalid-dir"), || {
             let result = Session::create("some-session");
-            assert!(matches!(result, Err(Error::InvalidSessionDirectory)));
+            assert!(matches!(result, Err(Error::UnableToLoad(_))));
         });
     }
 }
