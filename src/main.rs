@@ -25,7 +25,7 @@ fn main() -> anyhow::Result<()> {
             );
         }
         Cli::Load { session } => {
-            let client: TmuxClient = Default::default();
+            let client = TmuxClient::new();
             let mut runner = Muxer::new(client);
 
             let output = runner.apply(&session)?;
