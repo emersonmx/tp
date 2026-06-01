@@ -1,0 +1,5 @@
+[pre-commit.commands.format]
+run = "just format --check --verbose"
+
+[pre-commit.commands.lint]
+run = "just lint"
