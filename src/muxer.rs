@@ -8,7 +8,6 @@ use std::{
     fmt::Display,
     path::{Path, PathBuf},
 };
-use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Id(String);
@@ -145,7 +144,7 @@ impl Keys {
     }
 }
 
-#[derive(Error, PartialEq, Debug)]
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum Error {
     #[error("unable to setup base ids: {0}")]
     BaseIdsError(String),
@@ -157,23 +156,32 @@ pub enum Error {
 #[cfg_attr(test, automock)]
 pub trait Client {
     fn get_option(&mut self, option_name: &OptionName) -> Result<OptionValue, Error>;
-    fn set_option(&mut self, option_name: &OptionName, option_value: &OptionValue);
+    fn set_option(
+        &mut self,
+        option_name: &OptionName,
+        option_value: &OptionValue,
+    ) -> Result<(), Error>;
 
-    fn new_session(&mut self, session_id: &SessionId, directory: &str);
-    fn switch_to_session(&mut self, session_id: &SessionId);
+    fn new_session(&mut self, session_id: &SessionId, directory: &str) -> Result<(), Error>;
+    fn switch_to_session(&mut self, session_id: &SessionId) -> Result<(), Error>;
     fn has_session(&mut self, session_id: &SessionId) -> bool;
 
-    fn new_window(&mut self, session_id: &SessionId, directory: &str);
-    fn rename_window(&mut self, window_id: &WindowID, window_name: &WindowName);
+    fn new_window(&mut self, session_id: &SessionId, directory: &str) -> Result<(), Error>;
+    fn rename_window(
+        &mut self,
+        window_id: &WindowID,
+        window_name: &WindowName,
+    ) -> Result<(), Error>;
 
-    fn new_pane(&mut self, window_id: &WindowID, directory: &str);
-    fn select_pane(&mut self, pane_id: &PaneID);
+    fn new_pane(&mut self, window_id: &WindowID, directory: &str) -> Result<(), Error>;
+    fn select_pane(&mut self, pane_id: &PaneID) -> Result<(), Error>;
 
-    fn send_keys(&mut self, pane_id: &PaneID, keys: Keys);
+    fn send_keys(&mut self, pane_id: &PaneID, keys: Keys) -> Result<(), Error>;
 
-    fn use_layout(&mut self, layout: &Layout);
+    fn use_layout(&mut self, layout: &Layout) -> Result<(), Error>;
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Output {
     pub session_name: String,
     pub is_new_session: bool,
@@ -230,7 +238,7 @@ impl<C: Client> Muxer<C> {
         let session_id = SessionId::new(&session.name);
         let mut windows = vec![];
         if self.client.has_session(&session_id) {
-            self.client.switch_to_session(&session_id);
+            let _ = self.client.switch_to_session(&session_id);
             return Ok(Output {
                 session_name: session.name.clone(),
                 is_new_session: false,
@@ -248,7 +256,7 @@ impl<C: Client> Muxer<C> {
                 .and_then(|window| window.panes.first().and_then(|pane| pane.directory.clone())),
         );
         let initial_dir = directory_to_string(initial_dir);
-        self.client.new_session(&session_id, &initial_dir);
+        let _ = self.client.new_session(&session_id, &initial_dir);
 
         let session_dir = session.directory.clone();
         let mut focus_pane: Option<PaneID> = None;
@@ -260,14 +268,16 @@ impl<C: Client> Muxer<C> {
                     &window_dir,
                     &window.panes.first().and_then(|pane| pane.directory.clone()),
                 );
-                self.client
+                let _ = self
+                    .client
                     .new_window(&session_id, &directory_to_string(initial_dir));
             }
 
             let widx = self.base_window_id + wid;
             let window_id = WindowID::new(&session_id, widx.to_string());
             if let Some(window_name) = &window.name {
-                self.client
+                let _ = self
+                    .client
                     .rename_window(&window_id, &WindowName::new(window_name));
             }
 
@@ -281,12 +291,13 @@ impl<C: Client> Muxer<C> {
 
                 let pane_dir = resolve_directory(&session_dir, &window_dir, &pane.directory);
                 if pid > 0 {
-                    self.client
+                    let _ = self
+                        .client
                         .new_pane(&window_id, &directory_to_string(pane_dir));
                 }
 
                 if let Some(cmd) = &pane.command {
-                    self.client.send_keys(&pane_id, Keys::new(cmd));
+                    let _ = self.client.send_keys(&pane_id, Keys::new(cmd));
                 }
 
                 panes.push(pidx);
@@ -296,10 +307,10 @@ impl<C: Client> Muxer<C> {
         }
 
         if let Some(pane) = focus_pane {
-            self.client.select_pane(&pane);
+            let _ = self.client.select_pane(&pane);
         }
 
-        self.client.switch_to_session(&session_id);
+        let _ = self.client.switch_to_session(&session_id);
 
         Ok(Output {
             session_name: session.name.clone(),
@@ -335,12 +346,12 @@ mod tests {
     fn client() -> MockClient {
         let mut mock_client = MockClient::new();
         mock_client.expect_has_session().return_const(false);
-        mock_client.expect_new_session().return_const(());
-        mock_client.expect_switch_to_session().return_const(());
+        mock_client.expect_new_session().return_const(Ok(()));
+        mock_client.expect_switch_to_session().return_const(Ok(()));
         mock_client
             .expect_get_option()
             .returning(|_| Ok(OptionValue::new("0")));
-        mock_client.expect_send_keys().return_const(());
+        mock_client.expect_send_keys().return_const(Ok(()));
         mock_client
     }
 
@@ -349,7 +360,7 @@ mod tests {
         let session: Session = Session::load_from_string("name: test").unwrap();
         let mut client = MockClient::new();
         client.expect_has_session().return_const(true);
-        client.expect_switch_to_session().return_const(());
+        client.expect_switch_to_session().return_const(Ok(()));
         let mut runner = Muxer::new(client);
 
         let output = runner.apply(&session).unwrap();
