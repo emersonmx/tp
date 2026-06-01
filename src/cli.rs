@@ -2,7 +2,7 @@ use crate::config::{Error, Session};
 use clap::Parser;
 use clap_complete::Shell;
 
-#[derive(Parser, Debug)]
+#[derive(Debug, Parser)]
 #[command(about = "A simple tmux session loader")]
 pub enum Cli {
     /// Create a new session file
