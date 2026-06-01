@@ -6,6 +6,13 @@ use std::process::{Command, Stdio};
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TmuxClient;
 
+fn system_error(source: std::io::Error) -> Error {
+    Error::System {
+        message: source.to_string(),
+        source,
+    }
+}
+
 impl Client for TmuxClient {
     fn is_running_inside_tmux(&mut self) -> bool {
         std::env::var("TMUX").is_ok()
@@ -16,10 +23,10 @@ impl Client for TmuxClient {
             .args(["show-options", "-gv", option_name.value()])
             .stderr(Stdio::null())
             .output()
-            .map_err(|e| Error::OptionNotFound(e.to_string()))?;
+            .map_err(system_error)?;
 
         let value = str::from_utf8(output.stdout.trim_ascii())
-            .map_err(|e| Error::OptionNotFound(e.to_string()))?;
+            .map_err(|_| Error::OptionNotFound(option_name.value().to_string()))?;
 
         Ok(OptionValue::new(value))
     }
@@ -34,7 +41,7 @@ impl Client for TmuxClient {
     }
 
     fn new_session(&mut self, session_id: &SessionId, directory: &str) -> Result<(), Error> {
-        let _ = Command::new("tmux")
+        Command::new("tmux")
             .args([
                 "new-session",
                 "-d",
@@ -45,16 +52,18 @@ impl Client for TmuxClient {
             ])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .output();
+            .output()
+            .map_err(system_error)?;
         Ok(())
     }
 
     fn switch_to_session(&mut self, session_id: &SessionId) -> Result<(), Error> {
-        let _ = Command::new("tmux")
+        Command::new("tmux")
             .args(["switch-client", "-t", &session_id.to_string()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .output();
+            .output()
+            .map_err(system_error)?;
         Ok(())
     }
 
@@ -63,7 +72,8 @@ impl Client for TmuxClient {
             .args(["has-session", "-t", &session_id.to_string()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .status();
+            .status()
+            .map_err(system_error);
 
         match output {
             Ok(status) => status.success(),
@@ -72,11 +82,12 @@ impl Client for TmuxClient {
     }
 
     fn new_window(&mut self, session_id: &SessionId, directory: &str) -> Result<(), Error> {
-        let _ = Command::new("tmux")
+        Command::new("tmux")
             .args(["new-window", "-c", directory, "-t", &session_id.to_string()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .output();
+            .output()
+            .map_err(system_error)?;
         Ok(())
     }
 
@@ -85,7 +96,7 @@ impl Client for TmuxClient {
         window_id: &WindowID,
         window_name: &WindowName,
     ) -> Result<(), Error> {
-        let _ = Command::new("tmux")
+        Command::new("tmux")
             .args([
                 "rename-window",
                 "-t",
@@ -94,12 +105,13 @@ impl Client for TmuxClient {
             ])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .output();
+            .output()
+            .map_err(system_error)?;
         Ok(())
     }
 
     fn new_pane(&mut self, window_id: &WindowID, directory: &str) -> Result<(), Error> {
-        let _ = Command::new("tmux")
+        Command::new("tmux")
             .args([
                 "split-window",
                 "-c",
@@ -109,32 +121,36 @@ impl Client for TmuxClient {
             ])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .output();
+            .output()
+            .map_err(system_error)?;
         Ok(())
     }
 
     fn select_pane(&mut self, pane_id: &PaneID) -> Result<(), Error> {
         let window_id = pane_id.window_id();
-        let _ = Command::new("tmux")
+        Command::new("tmux")
             .args(["select-window", "-t", &window_id.to_string()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .output();
+            .output()
+            .map_err(system_error)?;
 
-        let _ = Command::new("tmux")
+        Command::new("tmux")
             .args(["select-pane", "-t", &pane_id.to_string()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .output();
+            .output()
+            .map_err(system_error)?;
         Ok(())
     }
 
     fn send_keys(&mut self, pane_id: &PaneID, keys: Keys) -> Result<(), Error> {
-        let _ = Command::new("tmux")
+        Command::new("tmux")
             .args(["send-keys", "-t", &pane_id.to_string(), keys.value(), "C-m"])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .output();
+            .output()
+            .map_err(system_error)?;
         Ok(())
     }
 
