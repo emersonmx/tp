@@ -39,7 +39,10 @@ fn main() -> Result<()> {
                 );
             }
         }
-        Cli::Completions { shell } => generate(shell)?,
+        Cli::Completions { shell } => {
+            let completion = generate(shell)?;
+            println!("{}", completion);
+        }
     }
 
     Ok(())

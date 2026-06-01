@@ -53,5 +53,8 @@ test *ARGS:
 coverage *ARGS:
     cargo tarpaulin {{ ARGS }}
 
+review-snap *ARGS:
+    cargo insta review {{ ARGS }}
+
 clean *ARGS:
     cargo clean {{ ARGS }}
