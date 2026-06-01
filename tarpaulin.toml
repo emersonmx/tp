@@ -1,2 +1,3 @@
 [config]
 skip-clean = true
+exclude-files = ["src/cli.rs", "src/main.rs"]
