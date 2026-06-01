@@ -168,7 +168,7 @@ pub trait Client {
 
     fn new_session(&mut self, session_id: &SessionId, directory: &str) -> Result<(), Error>;
     fn switch_to_session(&mut self, session_id: &SessionId) -> Result<(), Error>;
-    fn has_session(&mut self, session_id: &SessionId) -> bool;
+    fn has_session(&mut self, session_id: &SessionId) -> Result<bool, Error>;
 
     fn new_window(&mut self, session_id: &SessionId, directory: &str) -> Result<(), Error>;
     fn rename_window(
@@ -245,7 +245,7 @@ impl<C: Client> Muxer<C> {
 
         let session_id = SessionId::new(&session.name);
         let mut windows = vec![];
-        if self.client.has_session(&session_id) {
+        if self.client.has_session(&session_id)? {
             self.client.switch_to_session(&session_id)?;
             return Ok(Output {
                 session_name: session.name.clone(),
@@ -351,7 +351,7 @@ mod tests {
     fn client() -> MockClient {
         let mut client = MockClient::new();
         client.expect_is_running_inside_tmux().return_const(true);
-        client.expect_has_session().return_const(false);
+        client.expect_has_session().returning(|_| Ok(false));
         client.expect_new_session().returning(|_, _| Ok(()));
         client.expect_switch_to_session().returning(|_| Ok(()));
         client
@@ -378,7 +378,7 @@ mod tests {
         let session: Session = Session::load_from_string("name: test").unwrap();
         let mut client = MockClient::new();
         client.expect_is_running_inside_tmux().return_const(true);
-        client.expect_has_session().return_const(true);
+        client.expect_has_session().returning(|_| Ok(true));
         client.expect_switch_to_session().returning(|_| Ok(()));
         let mut runner = Muxer::new(client);
 

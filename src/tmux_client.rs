@@ -67,18 +67,15 @@ impl Client for TmuxClient {
         Ok(())
     }
 
-    fn has_session(&mut self, session_id: &SessionId) -> bool {
+    fn has_session(&mut self, session_id: &SessionId) -> Result<bool, Error> {
         let output = Command::new("tmux")
             .args(["has-session", "-t", &session_id.to_string()])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status()
-            .map_err(system_error);
+            .map_err(system_error)?;
 
-        match output {
-            Ok(status) => status.success(),
-            _ => false,
-        }
+        Ok(output.success())
     }
 
     fn new_window(&mut self, session_id: &SessionId, directory: &str) -> Result<(), Error> {
