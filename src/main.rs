@@ -1,5 +1,4 @@
 use crate::{config::Session, muxer::Muxer};
-use anyhow::Result;
 use clap::Parser;
 use cli::Cli;
 use completions::generate;
@@ -11,7 +10,7 @@ mod config;
 mod muxer;
 mod tmux_client;
 
-fn main() -> Result<()> {
+fn main() -> anyhow::Result<()> {
     match Cli::parse() {
         Cli::List => {
             for session in Session::list() {
