@@ -244,7 +244,7 @@ impl<C: Client> Muxer<C> {
         let session_id = SessionId::new(&session.name);
         let mut windows = vec![];
         if self.client.has_session(&session_id) {
-            let _ = self.client.switch_to_session(&session_id);
+            self.client.switch_to_session(&session_id)?;
             return Ok(Output {
                 session_name: session.name.clone(),
                 is_new_session: false,
@@ -262,7 +262,7 @@ impl<C: Client> Muxer<C> {
                 .and_then(|window| window.panes.first().and_then(|pane| pane.directory.clone())),
         );
         let initial_dir = directory_to_string(initial_dir);
-        let _ = self.client.new_session(&session_id, &initial_dir);
+        self.client.new_session(&session_id, &initial_dir)?;
 
         let session_dir = session.directory.clone();
         let mut focus_pane: Option<PaneID> = None;
@@ -274,17 +274,15 @@ impl<C: Client> Muxer<C> {
                     &window_dir,
                     &window.panes.first().and_then(|pane| pane.directory.clone()),
                 );
-                let _ = self
-                    .client
-                    .new_window(&session_id, &directory_to_string(initial_dir));
+                self.client
+                    .new_window(&session_id, &directory_to_string(initial_dir))?;
             }
 
             let widx = self.base_window_id + wid;
             let window_id = WindowID::new(&session_id, widx.to_string());
             if let Some(window_name) = &window.name {
-                let _ = self
-                    .client
-                    .rename_window(&window_id, &WindowName::new(window_name));
+                self.client
+                    .rename_window(&window_id, &WindowName::new(window_name))?;
             }
 
             let mut panes: Vec<usize> = vec![];
@@ -297,13 +295,12 @@ impl<C: Client> Muxer<C> {
 
                 let pane_dir = resolve_directory(&session_dir, &window_dir, &pane.directory);
                 if pid > 0 {
-                    let _ = self
-                        .client
-                        .new_pane(&window_id, &directory_to_string(pane_dir));
+                    self.client
+                        .new_pane(&window_id, &directory_to_string(pane_dir))?;
                 }
 
                 if let Some(cmd) = &pane.command {
-                    let _ = self.client.send_keys(&pane_id, Keys::new(cmd));
+                    self.client.send_keys(&pane_id, Keys::new(cmd))?;
                 }
 
                 panes.push(pidx);
@@ -313,10 +310,10 @@ impl<C: Client> Muxer<C> {
         }
 
         if let Some(pane) = focus_pane {
-            let _ = self.client.select_pane(&pane);
+            self.client.select_pane(&pane)?;
         }
 
-        let _ = self.client.switch_to_session(&session_id);
+        self.client.switch_to_session(&session_id)?;
 
         Ok(Output {
             session_name: session.name.clone(),
