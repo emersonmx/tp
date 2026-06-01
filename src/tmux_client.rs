@@ -7,6 +7,10 @@ use std::process::{Command, Stdio};
 pub struct TmuxClient;
 
 impl Client for TmuxClient {
+    fn is_running_inside_tmux(&mut self) -> bool {
+        std::env::var("TMUX").is_ok()
+    }
+
     fn get_option(&mut self, option_name: &OptionName) -> Result<OptionValue, Error> {
         let output = Command::new("tmux")
             .args(["show-options", "-gv", option_name.value()])

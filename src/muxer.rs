@@ -148,6 +148,8 @@ impl Keys {
 pub enum Error {
     #[error("unable to setup base ids: {0}")]
     BaseIds(String),
+    #[error("not running inside a tmux session")]
+    NotInsideTmuxSession,
     #[error("option `{0}` not found")]
     OptionNotFound(String),
 }
@@ -155,6 +157,8 @@ pub enum Error {
 #[allow(dead_code)]
 #[cfg_attr(test, automock)]
 pub trait Client {
+    fn is_running_inside_tmux(&mut self) -> bool;
+
     fn get_option(&mut self, option_name: &OptionName) -> Result<OptionValue, Error>;
     fn set_option(
         &mut self,
@@ -235,6 +239,10 @@ impl<C: Client> Muxer<C> {
     }
 
     pub fn apply(&mut self, session: &Session) -> Result<Output, Error> {
+        if !self.client.is_running_inside_tmux() {
+            return Err(Error::NotInsideTmuxSession);
+        }
+
         let session_id = SessionId::new(&session.name);
         let mut windows = vec![];
         if self.client.has_session(&session_id) {
@@ -344,21 +352,23 @@ mod tests {
 
     #[fixture]
     fn client() -> MockClient {
-        let mut mock_client = MockClient::new();
-        mock_client.expect_has_session().return_const(false);
-        mock_client.expect_new_session().return_const(Ok(()));
-        mock_client.expect_switch_to_session().return_const(Ok(()));
-        mock_client
+        let mut client = MockClient::new();
+        client.expect_is_running_inside_tmux().return_const(true);
+        client.expect_has_session().return_const(false);
+        client.expect_new_session().return_const(Ok(()));
+        client.expect_switch_to_session().return_const(Ok(()));
+        client
             .expect_get_option()
             .returning(|_| Ok(OptionValue::new("0")));
-        mock_client.expect_send_keys().return_const(Ok(()));
-        mock_client
+        client.expect_send_keys().return_const(Ok(()));
+        client
     }
 
     #[rstest]
     fn switch_to_session_if_exists() {
         let session: Session = Session::load_from_string("name: test").unwrap();
         let mut client = MockClient::new();
+        client.expect_is_running_inside_tmux().return_const(true);
         client.expect_has_session().return_const(true);
         client.expect_switch_to_session().return_const(Ok(()));
         let mut runner = Muxer::new(client);
