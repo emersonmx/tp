@@ -365,6 +365,18 @@ mod tests {
     }
 
     #[rstest]
+    fn not_running_inside_tmux() {
+        let mut client = MockClient::new();
+        client.expect_is_running_inside_tmux().return_const(false);
+        let mut runner = Muxer::new(client);
+        let session: Session = Session::load_from_string("name: test").unwrap();
+
+        let output = runner.apply(&session);
+
+        assert_eq!(output, Err(Error::NotInsideTmuxSession));
+    }
+
+    #[rstest]
     fn switch_to_session_if_exists() {
         let session: Session = Session::load_from_string("name: test").unwrap();
         let mut client = MockClient::new();
