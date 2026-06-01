@@ -329,8 +329,10 @@ impl<C: Client> Muxer<C> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::{fixture, rstest};
 
-    fn make_mock_client() -> MockClient {
+    #[fixture]
+    fn client() -> MockClient {
         let mut mock_client = MockClient::new();
         mock_client.expect_has_session().return_const(false);
         mock_client.expect_new_session().return_const(());
@@ -342,13 +344,13 @@ mod tests {
         mock_client
     }
 
-    #[test]
+    #[rstest]
     fn switch_to_session_if_exists() {
         let session: Session = Session::load_from_string("name: test").unwrap();
-        let mut mock_client = MockClient::new();
-        mock_client.expect_has_session().return_const(true);
-        mock_client.expect_switch_to_session().return_const(());
-        let mut runner = Muxer::new(mock_client);
+        let mut client = MockClient::new();
+        client.expect_has_session().return_const(true);
+        client.expect_switch_to_session().return_const(());
+        let mut runner = Muxer::new(client);
 
         let output = runner.apply(&session).unwrap();
 
@@ -356,11 +358,10 @@ mod tests {
         assert!(!output.is_new_session);
     }
 
-    #[test]
-    fn create_a_session_if_not_exists() {
+    #[rstest]
+    fn create_a_session_if_not_exists(client: MockClient) {
         let session: Session = Session::load_from_string("name: test").unwrap();
-        let mock_client = make_mock_client();
-        let mut runner = Muxer::new(mock_client);
+        let mut runner = Muxer::new(client);
 
         let output = runner.apply(&session).unwrap();
 
@@ -368,11 +369,10 @@ mod tests {
         assert!(output.is_new_session);
     }
 
-    #[test]
-    fn base_ids_starts_at_zero() {
+    #[rstest]
+    fn base_ids_starts_at_zero(client: MockClient) {
         let session: Session = Session::load_from_string("name: test").unwrap();
-        let mock_client = make_mock_client();
-        let mut runner = Muxer::new(mock_client);
+        let mut runner = Muxer::new(client);
 
         let output = runner.apply(&session).unwrap();
 
