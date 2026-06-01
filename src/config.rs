@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{env, fs, io, path::PathBuf};
-use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("unable to load: {0}")]
     UnableToLoad(#[from] io::Error),

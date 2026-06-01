@@ -1,9 +1,8 @@
 use crate::cli::Cli;
 use clap::CommandFactory;
 use clap_complete::Shell;
-use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("invalid utf8: {0}")]
     InvalidUtf8(#[from] std::string::FromUtf8Error),
