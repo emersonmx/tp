@@ -152,6 +152,8 @@ pub enum Error {
     OptionNotFound(String),
     #[error("a system error occurred while executing tmux command")]
     System(#[source] std::io::Error),
+    #[error("tmux command failed ({0})")]
+    Tmux(String),
 }
 
 #[allow(dead_code)]
