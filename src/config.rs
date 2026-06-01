@@ -11,19 +11,19 @@ pub enum Error {
     FileNotFound {
         file: PathBuf,
         #[source]
-        error: io::Error,
+        source: io::Error,
     },
     #[error("unable to read file '{file}'")]
     FileUnreadable {
         file: PathBuf,
         #[source]
-        error: io::Error,
+        source: io::Error,
     },
     #[error("unable to write session file '{file}'")]
     WriteFailed {
         file: PathBuf,
         #[source]
-        error: io::Error,
+        source: io::Error,
     },
     #[error("parser error")]
     UnableToParseConfig(#[source] serde_yaml::Error),
@@ -31,7 +31,7 @@ pub enum Error {
     SerializationFailed {
         file: PathBuf,
         #[source]
-        error: serde_yaml::Error,
+        source: serde_yaml::Error,
     },
 }
 
@@ -100,7 +100,7 @@ impl Session {
         let session_path = Self::get_session_path(name.as_ref())?;
         let content = fs::read_to_string(&session_path).map_err(|e| Error::FileUnreadable {
             file: session_path,
-            error: e,
+            source: e,
         })?;
         let session = Self::load_from_string(&content)?;
         Ok(session)
@@ -114,7 +114,7 @@ impl Session {
             .canonicalize()
             .map_err(|e| Error::FileNotFound {
                 file: dir.join(format!("{}.{}", name, Self::DEFAULT_FILE_EXT)),
-                error: e,
+                source: e,
             })?;
         Ok(path)
     }
@@ -153,12 +153,12 @@ impl Session {
 
         let content = serde_yaml::to_string(&session).map_err(|e| Error::SerializationFailed {
             file: session_path.clone(),
-            error: e,
+            source: e,
         })?;
 
         fs::write(&session_path, content).map_err(|e| Error::WriteFailed {
             file: session_path.clone(),
-            error: e,
+            source: e,
         })?;
 
         Ok(session_path)
