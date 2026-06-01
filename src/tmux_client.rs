@@ -7,10 +7,7 @@ use std::process::{Command, Stdio};
 pub struct TmuxClient;
 
 fn system_error(source: std::io::Error) -> Error {
-    Error::System {
-        message: source.to_string(),
-        source,
-    }
+    Error::System(source)
 }
 
 impl Client for TmuxClient {
@@ -25,8 +22,11 @@ impl Client for TmuxClient {
             .output()
             .map_err(system_error)?;
 
-        let value = str::from_utf8(output.stdout.trim_ascii())
-            .map_err(|_| Error::OptionNotFound(option_name.value().to_string()))?;
+        if !output.status.success() {
+            return Err(Error::OptionNotFound(option_name.value().to_string()));
+        }
+
+        let value = String::from_utf8_lossy(output.stdout.trim_ascii());
 
         Ok(OptionValue::new(value))
     }
