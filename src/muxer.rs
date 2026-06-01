@@ -147,7 +147,7 @@ impl Keys {
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum Error {
     #[error("unable to setup base ids: {0}")]
-    BaseIdsError(String),
+    BaseIds(String),
     #[error("option `{0}` not found")]
     OptionNotFound(String),
 }
@@ -329,10 +329,10 @@ impl<C: Client> Muxer<C> {
         let value = self
             .client
             .get_option(&OptionName::new(name))
-            .map_err(|e| Error::BaseIdsError(e.to_string()))?
+            .map_err(|e| Error::BaseIds(e.to_string()))?
             .value()
             .parse()
-            .map_err(|e| Error::BaseIdsError(format!("{}", e)))?;
+            .map_err(|e| Error::BaseIds(format!("{}", e)))?;
         Ok(value)
     }
 }
