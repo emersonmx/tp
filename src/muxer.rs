@@ -1,8 +1,6 @@
 #![allow(dead_code)]
 
 use crate::config::Session;
-#[cfg(test)]
-use mockall::automock;
 use std::{
     env,
     fmt::Display,
@@ -155,7 +153,7 @@ pub enum Error {
 }
 
 #[allow(dead_code)]
-#[cfg_attr(test, automock)]
+#[cfg_attr(test, mockall::automock)]
 pub trait Client {
     fn is_running_inside_tmux(&mut self) -> bool;
 

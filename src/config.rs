@@ -1,5 +1,3 @@
-#[cfg(test)]
-use mockall::automock;
 use serde::{Deserialize, Serialize};
 use std::{env, fs, io, path::PathBuf};
 
@@ -35,7 +33,7 @@ pub enum Error {
     },
 }
 
-#[cfg_attr(test, automock)]
+#[cfg_attr(test, mockall::automock)]
 trait HomeDirProvider: Send + Sync {
     fn home_dir(&self) -> Option<PathBuf>;
 }
