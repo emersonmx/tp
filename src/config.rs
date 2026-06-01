@@ -133,7 +133,15 @@ mod tests {
     use tempfile::tempdir;
 
     #[rstest]
-    fn read_simple_session_file() {
+    fn load_from_string_parser_error() {
+        let content = "parser error";
+        let session: Result<Session, Error> = Session::load_from_string(content);
+
+        assert!(matches!(session, Err(Error::UnableToParseConfig(_))));
+    }
+
+    #[rstest]
+    fn load_from_string_session_file() {
         let content = "name: simple-test";
         let session: Session = Session::load_from_string(content).unwrap();
 
@@ -142,22 +150,14 @@ mod tests {
     }
 
     #[rstest]
-    fn read_not_found_session_file() {
+    fn load_from_name_unable_to_load() {
         let session = Session::load_from_name("not-found/path");
 
         assert!(matches!(session, Err(Error::UnableToLoad(_))));
     }
 
     #[rstest]
-    fn read_incorrect_session_file() {
-        let content = "parser error";
-        let session: Result<Session, Error> = Session::load_from_string(content);
-
-        assert!(matches!(session, Err(Error::UnableToParseConfig(_))));
-    }
-
-    #[rstest]
-    fn load_session_invalid_dir() {
+    fn load_from_name_invalid_dir() {
         temp_env::with_var(Session::DEFAULT_DIR_ENV, Some("invalid-dir"), || {
             let session = Session::load_from_name("a-session-path");
 
