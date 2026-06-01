@@ -15,6 +15,16 @@ setup:
         cargo install --locked bacon
     fi
 
+    if ! command -v cargo-nextest &> /dev/null; then
+        echo "nextest not found, installing..."
+        cargo install --locked cargo-nextest
+    fi
+
+    if ! command -v cargo-tarpaulin &> /dev/null; then
+        echo "tarpaulin not found, installing..."
+        cargo install --locked cargo-tarpaulin
+    fi
+
 build *ARGS:
     cargo build {{ ARGS }}
 
@@ -38,7 +48,10 @@ ci:
     cargo clippy
 
 test *ARGS:
-    cargo test {{ ARGS }}
+    cargo nextest {{ ARGS }}
+
+coverage *ARGS:
+    cargo tarpaulin {{ ARGS }}
 
 clean *ARGS:
     cargo clean {{ ARGS }}
