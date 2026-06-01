@@ -29,8 +29,9 @@ fn parser_session_config(value: &str) -> Result<Session, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
-    #[test]
+    #[rstest]
     fn verify_cli() {
         use clap::CommandFactory;
         Cli::command().debug_assert()

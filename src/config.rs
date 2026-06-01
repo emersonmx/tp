@@ -129,9 +129,10 @@ impl Session {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use tempfile::tempdir;
 
-    #[test]
+    #[rstest]
     fn read_simple_session_file() {
         let content = "name: simple-test";
         let session: Session = Session::load_from_string(content).unwrap();
@@ -140,14 +141,14 @@ mod tests {
         assert_eq!(session.directory, None);
     }
 
-    #[test]
+    #[rstest]
     fn read_not_found_session_file() {
         let session = Session::load_from_name("not-found/path");
 
         assert!(matches!(session, Err(Error::UnableToLoad(_))));
     }
 
-    #[test]
+    #[rstest]
     fn read_incorrect_session_file() {
         let content = "parser error";
         let session: Result<Session, Error> = Session::load_from_string(content);
@@ -155,7 +156,7 @@ mod tests {
         assert!(matches!(session, Err(Error::UnableToParseConfig(_))));
     }
 
-    #[test]
+    #[rstest]
     fn load_session_invalid_dir() {
         temp_env::with_var(Session::DEFAULT_DIR_ENV, Some("invalid-dir"), || {
             let session = Session::load_from_name("a-session-path");
@@ -164,7 +165,7 @@ mod tests {
         });
     }
 
-    #[test]
+    #[rstest]
     fn session_must_have_one_window_with_one_pane() {
         let content = "name: simple-test";
         let session: Session = Session::load_from_string(content).unwrap();
@@ -176,7 +177,7 @@ mod tests {
         assert_eq!(session.windows[0].panes[0].command, None);
     }
 
-    #[test]
+    #[rstest]
     fn window_must_have_one_pane() {
         let content = "
         name: simple-test
@@ -192,7 +193,7 @@ mod tests {
         assert_eq!(session.windows[0].panes[0].command, None);
     }
 
-    #[test]
+    #[rstest]
     fn list_all_sessions() {
         let temp_test_dir = tempdir().expect("Failed to create temporary directory");
         let tmp_dir = temp_test_dir.path();
@@ -224,7 +225,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[rstest]
     fn list_sessions_when_empty_dir() {
         let temp_test_dir = tempdir().expect("Failed to create temporary directory");
         let tmp_dir = temp_test_dir.path();
@@ -238,7 +239,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[rstest]
     fn list_sessions_when_sessions_dir_not_exists() {
         temp_env::with_var(Session::DEFAULT_DIR_ENV, Some("invalid-dir"), || {
             let sessions = Session::list();
@@ -246,7 +247,7 @@ mod tests {
         });
     }
 
-    #[test]
+    #[rstest]
     fn list_sessions_with_read_error() {
         let temp_file =
             tempfile::NamedTempFile::new().expect("Failed to create temporary directory");
@@ -263,7 +264,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[rstest]
     fn when_new_session_success() {
         let session_name = "new-test-session";
         let temp_test_dir = tempdir().expect("Failed to create temporary directory");
@@ -301,7 +302,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[rstest]
     fn when_new_session_invalid_dir() {
         temp_env::with_var(Session::DEFAULT_DIR_ENV, Some("invalid-dir"), || {
             let result = Session::create("some-session");
