@@ -129,6 +129,16 @@ impl OptionValue {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Layout(String);
 
+impl Layout {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self(name.into())
+    }
+
+    pub fn value(&self) -> &str {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Keys(String);
 
