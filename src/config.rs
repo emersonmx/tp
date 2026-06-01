@@ -130,7 +130,6 @@ impl Session {
 mod tests {
     use super::*;
     use tempfile::tempdir;
-    const HOME_ENV: &str = "HOME";
 
     #[test]
     fn read_simple_session_file() {
