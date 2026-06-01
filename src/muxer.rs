@@ -144,7 +144,7 @@ impl Keys {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("unable to setup base ids: {0}")]
     BaseIds(String),
@@ -355,12 +355,12 @@ mod tests {
         let mut client = MockClient::new();
         client.expect_is_running_inside_tmux().return_const(true);
         client.expect_has_session().return_const(false);
-        client.expect_new_session().return_const(Ok(()));
-        client.expect_switch_to_session().return_const(Ok(()));
+        client.expect_new_session().returning(|_, _| Ok(()));
+        client.expect_switch_to_session().returning(|_| Ok(()));
         client
             .expect_get_option()
             .returning(|_| Ok(OptionValue::new("0")));
-        client.expect_send_keys().return_const(Ok(()));
+        client.expect_send_keys().returning(|_, _| Ok(()));
         client
     }
 
@@ -373,7 +373,7 @@ mod tests {
 
         let output = runner.apply(&session);
 
-        assert_eq!(output, Err(Error::NotInsideTmuxSession));
+        assert!(matches!(output, Err(Error::NotInsideTmuxSession)));
     }
 
     #[rstest]
@@ -382,7 +382,7 @@ mod tests {
         let mut client = MockClient::new();
         client.expect_is_running_inside_tmux().return_const(true);
         client.expect_has_session().return_const(true);
-        client.expect_switch_to_session().return_const(Ok(()));
+        client.expect_switch_to_session().returning(|_| Ok(()));
         let mut runner = Muxer::new(client);
 
         let output = runner.apply(&session).unwrap();
