@@ -150,7 +150,7 @@ pub enum Error {
     NotInsideTmuxSession,
     #[error("option `{0}` not found")]
     OptionNotFound(String),
-    #[error("a system error occurred")]
+    #[error("a system error occurred while executing tmux command")]
     System(#[source] std::io::Error),
 }
 
