@@ -15,7 +15,6 @@ thiserror = "2"
 
 [dev-dependencies]
 insta = "1.47"
-mockall = "0.14"
 rstest = "0.26"
 temp-env = "0.3"
 tempfile = "3.20"

@@ -33,19 +33,6 @@ pub enum Error {
     },
 }
 
-#[cfg_attr(test, mockall::automock)]
-trait HomeDirProvider: Send + Sync {
-    fn home_dir(&self) -> Option<PathBuf>;
-}
-
-struct EnvHomeDirProvider;
-
-impl HomeDirProvider for EnvHomeDirProvider {
-    fn home_dir(&self) -> Option<PathBuf> {
-        env::home_dir()
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Session {
@@ -92,7 +79,10 @@ impl Session {
     const DEFAULT_DIR_ENV: &str = "TP_SESSIONS_DIR";
     const DEFAULT_DIR: &str = ".config/tp";
     const DEFAULT_FILE_EXT: &str = "yaml";
-    const DEFAULT_HOME_DIR_PROVIDER: EnvHomeDirProvider = EnvHomeDirProvider;
+
+    fn default_home_dir_provider() -> Option<PathBuf> {
+        env::home_dir()
+    }
 
     pub fn load_from_name(name: impl AsRef<str>) -> Result<Self, Error> {
         let session_path = Self::get_session_path(name.as_ref())?;
@@ -105,7 +95,7 @@ impl Session {
     }
 
     fn get_session_path(name: &str) -> Result<PathBuf, Error> {
-        let dir = Self::default_directory_with_provider(Self::DEFAULT_HOME_DIR_PROVIDER)
+        let dir = Self::default_directory_with_provider(Self::default_home_dir_provider)
             .ok_or(Error::InvalidSessionDirectory)?;
         let path = dir
             .join(format!("{}.{}", name, Self::DEFAULT_FILE_EXT))
@@ -117,11 +107,11 @@ impl Session {
         Ok(path)
     }
 
-    fn default_directory_with_provider(provider: impl HomeDirProvider) -> Option<PathBuf> {
+    fn default_directory_with_provider(provider: impl Fn() -> Option<PathBuf>) -> Option<PathBuf> {
         env::var(Self::DEFAULT_DIR_ENV)
             .ok()
             .map(PathBuf::from)
-            .or_else(|| provider.home_dir().map(|home| home.join(Self::DEFAULT_DIR)))
+            .or_else(|| provider().map(|home| home.join(Self::DEFAULT_DIR)))
     }
 
     pub fn load_from_string(content: impl AsRef<str>) -> Result<Self, Error> {
@@ -145,7 +135,7 @@ impl Session {
             }],
         };
 
-        let dir = Self::default_directory_with_provider(Self::DEFAULT_HOME_DIR_PROVIDER)
+        let dir = Self::default_directory_with_provider(Self::default_home_dir_provider)
             .ok_or(Error::InvalidSessionDirectory)?;
         let session_path = dir.join(format!("{}.{}", session.name, Self::DEFAULT_FILE_EXT));
 
@@ -164,7 +154,7 @@ impl Session {
 
     pub fn list() -> Vec<String> {
         let mut sessions: Vec<String> =
-            Self::default_directory_with_provider(Session::DEFAULT_HOME_DIR_PROVIDER)
+            Self::default_directory_with_provider(Self::default_home_dir_provider)
                 .and_then(|dir| fs::read_dir(dir).ok())
                 .into_iter()
                 .flatten()
@@ -244,11 +234,8 @@ mod tests {
 
     #[rstest]
     fn default_directory_when_no_envs() {
-        let mut mock = MockHomeDirProvider::new();
-        mock.expect_home_dir().return_const(None);
-
         temp_env::with_var_unset(Session::DEFAULT_DIR_ENV, || {
-            let dir = Session::default_directory_with_provider(mock);
+            let dir = Session::default_directory_with_provider(|| None);
             assert!(dir.is_none());
         });
     }
@@ -256,7 +243,8 @@ mod tests {
     #[rstest]
     fn default_directory_from_env() {
         temp_env::with_var(Session::DEFAULT_DIR_ENV, Some("/custom/dir"), || {
-            let dir = Session::default_directory_with_provider(Session::DEFAULT_HOME_DIR_PROVIDER);
+            let dir =
+                Session::default_directory_with_provider(|| Some(PathBuf::from("/home/testuser")));
             assert_eq!(dir, Some(PathBuf::from("/custom/dir")));
         });
     }
