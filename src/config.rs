@@ -24,12 +24,12 @@ pub enum Error {
         source: io::Error,
     },
     #[error("parser error")]
-    UnableToParseConfig(#[source] serde_yaml::Error),
+    UnableToParseConfig(#[source] toml::de::Error),
     #[error("unable to serialize session")]
     SerializationFailed {
         file: PathBuf,
         #[source]
-        source: serde_yaml::Error,
+        source: toml::ser::Error,
     },
 }
 
@@ -78,7 +78,7 @@ fn default_panes() -> Vec<Pane> {
 impl Session {
     const DEFAULT_DIR_ENV: &str = "TP_SESSIONS_DIR";
     const DEFAULT_DIR: &str = ".config/tp";
-    const DEFAULT_FILE_EXT: &str = "yaml";
+    const DEFAULT_FILE_EXT: &str = "toml";
 
     fn default_home_dir_provider() -> Option<PathBuf> {
         env::home_dir()
@@ -115,8 +115,7 @@ impl Session {
     }
 
     pub fn load_from_string(content: impl AsRef<str>) -> Result<Self, Error> {
-        let session: Self =
-            serde_yaml::from_str(content.as_ref()).map_err(Error::UnableToParseConfig)?;
+        let session: Self = toml::from_str(content.as_ref()).map_err(Error::UnableToParseConfig)?;
         Ok(session)
     }
 
@@ -139,7 +138,7 @@ impl Session {
             .ok_or(Error::InvalidSessionDirectory)?;
         let session_path = dir.join(format!("{}.{}", session.name, Self::DEFAULT_FILE_EXT));
 
-        let content = serde_yaml::to_string(&session).map_err(|e| Error::SerializationFailed {
+        let content = toml::to_string(&session).map_err(|e| Error::SerializationFailed {
             file: session_path.clone(),
             source: e,
         })?;
@@ -161,7 +160,10 @@ impl Session {
                 .filter_map(|entry_result| entry_result.ok())
                 .map(|entry| entry.path())
                 .filter(|path| path.is_file())
-                .filter(|path| path.extension().is_some_and(|ext| ext == "yaml"))
+                .filter(|path| {
+                    path.extension()
+                        .is_some_and(|ext| ext == Self::DEFAULT_FILE_EXT)
+                })
                 .filter_map(|path| {
                     path.file_stem()
                         .and_then(|stem| stem.to_str())
@@ -193,7 +195,8 @@ mod tests {
             Session::DEFAULT_DIR_ENV,
             Some(tmp_dir.to_str().unwrap()),
             || {
-                let file_path = tmp_dir.join(format!("{}.yaml", session_name));
+                let file_path =
+                    tmp_dir.join(format!("{}.{}", session_name, Session::DEFAULT_FILE_EXT));
                 File::create(&file_path).unwrap();
                 fs::set_permissions(&file_path, Permissions::from_mode(0o000)).unwrap();
 
@@ -214,8 +217,9 @@ mod tests {
             Session::DEFAULT_DIR_ENV,
             Some(tmp_dir.to_str().unwrap()),
             || {
-                let file_path = tmp_dir.join(format!("{}.yaml", session_name));
-                fs::write(&file_path, "name: test-session").unwrap();
+                let file_path =
+                    tmp_dir.join(format!("{}.{}", session_name, Session::DEFAULT_FILE_EXT));
+                fs::write(&file_path, "name = 'test-session'").unwrap();
 
                 let result = Session::load_from_name(session_name).unwrap();
                 assert_eq!(result.name, session_name);
@@ -259,7 +263,7 @@ mod tests {
 
     #[rstest]
     fn should_load_from_string() {
-        let content = "name: simple-test";
+        let content = "name = 'simple-test'";
         let session: Session = Session::load_from_string(content).unwrap();
 
         assert_eq!(session.name, "simple-test");
@@ -268,7 +272,7 @@ mod tests {
 
     #[rstest]
     fn session_must_have_one_window_with_one_pane() {
-        let content = "name: simple-test";
+        let content = "name = 'simple-test'";
         let session: Session = Session::load_from_string(content).unwrap();
 
         assert_eq!(session.windows.len(), 1);
@@ -281,9 +285,9 @@ mod tests {
     #[rstest]
     fn window_must_have_one_pane() {
         let content = "
-        name: simple-test
-        windows:
-          -
+        name = 'simple-test'
+
+        [[windows]]
         ";
         let session: Session = Session::load_from_string(content).unwrap();
 
@@ -304,12 +308,12 @@ mod tests {
             || {
                 fs::write(
                     tmp_dir.join(format!("session1.{}", Session::DEFAULT_FILE_EXT)),
-                    "name: session1",
+                    "name = 'session1'",
                 )
                 .unwrap();
                 fs::write(
                     tmp_dir.join(format!("session2.{}", Session::DEFAULT_FILE_EXT)),
-                    "name: session2",
+                    "name = 'session2'",
                 )
                 .unwrap();
                 fs::write(tmp_dir.join("other_file.txt"), "content").unwrap();
