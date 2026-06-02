@@ -2,13 +2,11 @@ use crate::{config::Session, muxer::Muxer};
 use clap::Parser;
 use cli::Cli;
 use completions::generate;
-use tmux_client::TmuxClient;
 
 mod cli;
 mod completions;
 mod config;
 mod muxer;
-mod tmux_client;
 
 fn main() -> anyhow::Result<()> {
     match Cli::parse() {
@@ -25,8 +23,7 @@ fn main() -> anyhow::Result<()> {
             );
         }
         Cli::Load { session } => {
-            let client = TmuxClient::new();
-            let mut runner = Muxer::new(client);
+            let mut runner = Muxer::new();
 
             let output = runner.apply(&session)?;
             if output.is_new_session {
