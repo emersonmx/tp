@@ -33,14 +33,18 @@ pub enum Error {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Session {
-    pub name: String,
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Pane {
+    #[serde(default)]
+    pub focus: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub directory: Option<PathBuf>,
-    #[serde(default = "default_windows")]
-    pub windows: Vec<Window>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+}
+
+fn default_panes() -> Vec<Pane> {
+    vec![Pane::default()]
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -53,16 +57,6 @@ pub struct Window {
     pub panes: Vec<Pane>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Pane {
-    #[serde(default)]
-    pub focus: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub directory: Option<PathBuf>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub command: Option<String>,
-}
-
 fn default_windows() -> Vec<Window> {
     vec![Window {
         name: None,
@@ -71,8 +65,14 @@ fn default_windows() -> Vec<Window> {
     }]
 }
 
-fn default_panes() -> Vec<Pane> {
-    vec![Pane::default()]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Session {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub directory: Option<PathBuf>,
+    #[serde(default = "default_windows")]
+    pub windows: Vec<Window>,
 }
 
 impl Session {
