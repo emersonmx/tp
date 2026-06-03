@@ -175,23 +175,29 @@ pub struct Output {
     pub windows: Vec<(usize, Vec<usize>)>,
 }
 
-type CommandExecutor = Box<dyn Fn(&[&str]) -> IoResult<StdOutput>>;
-
-pub struct Muxer {
+pub struct Muxer<E>
+where
+    E: Fn(&[&str]) -> IoResult<StdOutput>,
+{
     base_window_id: usize,
     base_pane_id: usize,
-    command_executor: CommandExecutor,
+    command_executor: E,
 }
 
-impl Muxer {
+impl Muxer<fn(&[&str]) -> IoResult<StdOutput>> {
     pub fn new() -> Self {
         Self {
             base_window_id: 0,
             base_pane_id: 0,
-            command_executor: Box::new(|args| Command::new("tmux").args(args).output()),
+            command_executor: |args| Command::new("tmux").args(args).output(),
         }
     }
+}
 
+impl<E> Muxer<E>
+where
+    E: Fn(&[&str]) -> IoResult<StdOutput>,
+{
     pub fn apply(&mut self, session: &Session) -> Result<Output, Error> {
         if !self.is_running_inside_tmux() {
             return Err(Error::NotInsideTmuxSession);
@@ -444,27 +450,26 @@ mod tests {
     use std::os::unix::process::ExitStatusExt;
     use std::rc::Rc;
 
+    type IoResultOutput = IoResult<StdOutput>;
     type CalledArgs = Rc<RefCell<String>>;
-    type MockCommandExecutor = (CalledArgs, CommandExecutor);
 
-    #[fixture]
-    fn command_executor(called_args: CalledArgs) -> MockCommandExecutor {
+    fn mock_muxer() -> (CalledArgs, Muxer<impl Fn(&[&str]) -> IoResultOutput>) {
+        let called_args = Rc::new(RefCell::new(String::new()));
         let called_args_clone = called_args.clone();
-        let executor = Box::new(move |args: &[&str]| {
-            called_args_clone.borrow_mut().push_str(&args.join(" "));
-            called_args_clone.borrow_mut().push('\n');
-            Ok(StdOutput {
-                status: std::process::ExitStatus::from_raw(0),
-                stdout: vec![],
-                stderr: vec![],
-            })
-        });
-        (called_args, executor)
-    }
-
-    #[fixture]
-    fn called_args() -> CalledArgs {
-        Rc::new(RefCell::new(String::new()))
+        let muxer = Muxer {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
+                called_args_clone.borrow_mut().push_str(&args.join(" "));
+                called_args_clone.borrow_mut().push('\n');
+                Ok(StdOutput {
+                    status: std::process::ExitStatus::from_raw(0),
+                    stdout: vec![],
+                    stderr: vec![],
+                })
+            },
+        };
+        (called_args, muxer)
     }
 
     #[fixture]
@@ -492,12 +497,9 @@ mod tests {
     }
 
     #[rstest]
-    fn new_muxer_allows_custom_command_executor(command_executor: MockCommandExecutor) {
-        let (called_args, command_executor) = command_executor;
-        let muxer = Muxer {
-            command_executor,
-            ..Muxer::new()
-        };
+    fn new_muxer_allows_custom_command_executor() {
+        let (called_args, muxer) = mock_muxer();
+
         let output = muxer.execute(&["test-command", "arg1", "arg2"]);
 
         assert!(output.is_ok());
@@ -517,12 +519,8 @@ mod tests {
     }
 
     #[rstest]
-    fn apply_when_has_session(command_executor: MockCommandExecutor, session: Session) {
-        let (called_args, command_executor) = command_executor;
-        let mut muxer = Muxer {
-            command_executor,
-            ..Muxer::new()
-        };
+    fn apply_when_has_session(session: Session) {
+        let (called_args, mut muxer) = mock_muxer();
 
         temp_env::with_var("TMUX", Some("test"), || {
             let output = muxer.apply(&session).unwrap();
@@ -537,14 +535,13 @@ mod tests {
     }
 
     #[rstest]
-    fn apply_on_new_session_without_windows(
-        command_executor: MockCommandExecutor,
-        session: Session,
-    ) {
-        let (called_args, command_executor) = command_executor;
+    fn apply_on_new_session_without_windows(session: Session) {
+        let (called_args, muxer) = mock_muxer();
         let mut muxer = Muxer {
-            command_executor: Box::new(move |args| {
-                let output = command_executor(args)?;
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
+                let output = muxer.execute(args)?;
 
                 match args[0] {
                     "has-session" => Ok(StdOutput {
@@ -557,8 +554,7 @@ mod tests {
                     }),
                     _ => Ok(output),
                 }
-            }),
-            ..Muxer::new()
+            },
         };
 
         temp_env::with_var("TMUX", Some("test"), || {
@@ -581,10 +577,7 @@ mod tests {
     }
 
     #[rstest]
-    fn apply_on_new_session_with_two_panes(
-        command_executor: MockCommandExecutor,
-        session: Session,
-    ) {
+    fn apply_on_new_session_with_two_panes(session: Session) {
         let session = Session {
             windows: vec![Window {
                 panes: vec![Default::default(), Default::default()],
@@ -592,10 +585,12 @@ mod tests {
             }],
             ..session
         };
-        let (called_args, command_executor) = command_executor;
+        let (called_args, muxer) = mock_muxer();
         let mut muxer = Muxer {
-            command_executor: Box::new(move |args| {
-                let output = command_executor(args)?;
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
+                let output = muxer.execute(args)?;
 
                 match args[0] {
                     "has-session" => Ok(StdOutput {
@@ -608,8 +603,7 @@ mod tests {
                     }),
                     _ => Ok(output),
                 }
-            }),
-            ..Muxer::new()
+            },
         };
 
         temp_env::with_var("TMUX", Some("test"), || {
@@ -633,18 +627,17 @@ mod tests {
     }
 
     #[rstest]
-    fn apply_on_new_session_with_two_windows(
-        command_executor: MockCommandExecutor,
-        session: Session,
-    ) {
+    fn apply_on_new_session_with_two_windows(session: Session) {
         let session = Session {
             windows: vec![Default::default(), Default::default()],
             ..session
         };
-        let (called_args, command_executor) = command_executor;
+        let (called_args, muxer) = mock_muxer();
         let mut muxer = Muxer {
-            command_executor: Box::new(move |args| {
-                let output = command_executor(args)?;
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
+                let output = muxer.execute(args)?;
 
                 match args[0] {
                     "has-session" => Ok(StdOutput {
@@ -657,8 +650,7 @@ mod tests {
                     }),
                     _ => Ok(output),
                 }
-            }),
-            ..Muxer::new()
+            },
         };
 
         temp_env::with_var("TMUX", Some("test"), || {
@@ -682,10 +674,7 @@ mod tests {
     }
 
     #[rstest]
-    fn apply_on_new_session_when_name_a_window(
-        command_executor: MockCommandExecutor,
-        session: Session,
-    ) {
+    fn apply_on_new_session_when_name_a_window(session: Session) {
         let session = Session {
             windows: vec![Window {
                 name: Some("window1".to_string()),
@@ -693,10 +682,12 @@ mod tests {
             }],
             ..session
         };
-        let (called_args, command_executor) = command_executor;
+        let (called_args, muxer) = mock_muxer();
         let mut muxer = Muxer {
-            command_executor: Box::new(move |args| {
-                let output = command_executor(args)?;
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
+                let output = muxer.execute(args)?;
 
                 match args[0] {
                     "has-session" => Ok(StdOutput {
@@ -709,8 +700,7 @@ mod tests {
                     }),
                     _ => Ok(output),
                 }
-            }),
-            ..Muxer::new()
+            },
         };
 
         temp_env::with_var("TMUX", Some("test"), || {
@@ -734,10 +724,7 @@ mod tests {
     }
 
     #[rstest]
-    fn apply_on_new_session_when_focus_a_pane(
-        command_executor: MockCommandExecutor,
-        session: Session,
-    ) {
+    fn apply_on_new_session_when_focus_a_pane(session: Session) {
         let session = Session {
             windows: vec![Window {
                 panes: vec![
@@ -751,10 +738,12 @@ mod tests {
             }],
             ..session
         };
-        let (called_args, command_executor) = command_executor;
+        let (called_args, muxer) = mock_muxer();
         let mut muxer = Muxer {
-            command_executor: Box::new(move |args| {
-                let output = command_executor(args)?;
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
+                let output = muxer.execute(args)?;
 
                 match args[0] {
                     "has-session" => Ok(StdOutput {
@@ -767,8 +756,7 @@ mod tests {
                     }),
                     _ => Ok(output),
                 }
-            }),
-            ..Muxer::new()
+            },
         };
 
         temp_env::with_var("TMUX", Some("test"), || {
@@ -794,10 +782,7 @@ mod tests {
     }
 
     #[rstest]
-    fn apply_on_new_session_when_run_a_command(
-        command_executor: MockCommandExecutor,
-        session: Session,
-    ) {
+    fn apply_on_new_session_when_run_a_command(session: Session) {
         let session = Session {
             windows: vec![Window {
                 panes: vec![Pane {
@@ -808,10 +793,12 @@ mod tests {
             }],
             ..session
         };
-        let (called_args, command_executor) = command_executor;
+        let (called_args, muxer) = mock_muxer();
         let mut muxer = Muxer {
-            command_executor: Box::new(move |args| {
-                let output = command_executor(args)?;
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
+                let output = muxer.execute(args)?;
 
                 match args[0] {
                     "has-session" => Ok(StdOutput {
@@ -824,8 +811,7 @@ mod tests {
                     }),
                     _ => Ok(output),
                 }
-            }),
-            ..Muxer::new()
+            },
         };
 
         temp_env::with_var("TMUX", Some("test"), || {
@@ -849,12 +835,8 @@ mod tests {
     }
 
     #[rstest]
-    fn call_execute_with_args(command_executor: MockCommandExecutor) {
-        let (called_args, command_executor) = command_executor;
-        let muxer = Muxer {
-            command_executor,
-            ..Muxer::new()
-        };
+    fn call_execute_with_args() {
+        let (called_args, muxer) = mock_muxer();
         let args = ["new-session", "-d", "-s", "test"];
 
         let _ = muxer.execute(&args);
@@ -864,12 +846,8 @@ mod tests {
     }
 
     #[rstest]
-    fn call_execute_without_args(command_executor: MockCommandExecutor) {
-        let (called_args, command_executor) = command_executor;
-        let muxer = Muxer {
-            command_executor,
-            ..Muxer::new()
-        };
+    fn call_execute_without_args() {
+        let (called_args, muxer) = mock_muxer();
         let args = [];
 
         let _ = muxer.execute(&args);
@@ -894,18 +872,19 @@ mod tests {
     }
 
     #[rstest]
-    fn get_option_returns_value(command_executor: MockCommandExecutor) {
-        let (called_args, command_executor) = command_executor;
+    fn get_option_returns_value() {
+        let (called_args, muxer) = mock_muxer();
         let muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(args, ["show-options", "-gv", "base-index"]);
-                let output = command_executor(args)?;
+                let output = muxer.execute(args)?;
                 Ok(StdOutput {
                     stdout: b"1\n".to_vec(),
                     ..output
                 })
-            }),
-            ..Muxer::new()
+            },
         };
 
         let option_value = muxer.get_option(&OptionName::new("base-index")).unwrap();
@@ -916,15 +895,16 @@ mod tests {
     }
 
     #[rstest]
-    fn get_option_system_error(command_executor: MockCommandExecutor) {
-        let (called_args, command_executor) = command_executor;
+    fn get_option_system_error() {
+        let (called_args, muxer) = mock_muxer();
         let muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(args, ["show-options", "-gv", "base-index"]);
-                command_executor(args)?;
+                muxer.execute(args)?;
                 Err(std::io::Error::other("command failed"))
-            }),
-            ..Muxer::new()
+            },
         };
 
         let output = muxer.get_option(&OptionName::new("base-index"));
@@ -935,18 +915,19 @@ mod tests {
     }
 
     #[rstest]
-    fn get_option_not_found(command_executor: MockCommandExecutor) {
-        let (called_args, command_executor) = command_executor;
+    fn get_option_not_found() {
+        let (called_args, muxer) = mock_muxer();
         let muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(args, ["show-options", "-gv", "base-index"]);
-                let output = command_executor(args)?;
+                let output = muxer.execute(args)?;
                 Ok(StdOutput {
                     status: std::process::ExitStatus::from_raw(1),
                     ..output
                 })
-            }),
-            ..Muxer::new()
+            },
         };
 
         let output = muxer.get_option(&OptionName::new("base-index"));
@@ -962,12 +943,8 @@ mod tests {
     // TODO: add set_option tests when implemented
 
     #[rstest]
-    fn new_session_calls_execute(command_executor: MockCommandExecutor, session_id: SessionId) {
-        let (called_args, command_executor) = command_executor;
-        let muxer = Muxer {
-            command_executor,
-            ..Muxer::new()
-        };
+    fn new_session_calls_execute(session_id: SessionId) {
+        let (called_args, muxer) = mock_muxer();
         let directory = "/home/user";
 
         let _ = muxer.new_session(&session_id, directory);
@@ -977,18 +954,19 @@ mod tests {
     }
 
     #[rstest]
-    fn new_session_system_error(command_executor: MockCommandExecutor, session_id: SessionId) {
-        let (called_args, command_executor) = command_executor;
+    fn new_session_system_error(session_id: SessionId) {
+        let (called_args, muxer) = mock_muxer();
         let muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(
                     args,
                     ["new-session", "-d", "-c", "/home/user", "-s", "test"]
                 );
-                command_executor(args)?;
+                muxer.execute(args)?;
                 Err(std::io::Error::other("command failed"))
-            }),
-            ..Muxer::new()
+            },
         };
         let directory = "/home/user";
 
@@ -1000,15 +978,8 @@ mod tests {
     }
 
     #[rstest]
-    fn switch_to_session_calls_execute(
-        command_executor: MockCommandExecutor,
-        session_id: SessionId,
-    ) {
-        let (called_args, command_executor) = command_executor;
-        let muxer = Muxer {
-            command_executor,
-            ..Muxer::new()
-        };
+    fn switch_to_session_calls_execute(session_id: SessionId) {
+        let (called_args, muxer) = mock_muxer();
 
         let _ = muxer.switch_to_session(&session_id);
 
@@ -1017,18 +988,16 @@ mod tests {
     }
 
     #[rstest]
-    fn switch_to_session_system_error(
-        command_executor: MockCommandExecutor,
-        session_id: SessionId,
-    ) {
-        let (called_args, command_executor) = command_executor;
+    fn switch_to_session_system_error(session_id: SessionId) {
+        let (called_args, muxer) = mock_muxer();
         let muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(args, ["switch-client", "-t", "test"]);
-                command_executor(args)?;
+                muxer.execute(args)?;
                 Err(std::io::Error::other("command failed"))
-            }),
-            ..Muxer::new()
+            },
         };
 
         let output = muxer.switch_to_session(&session_id);
@@ -1039,12 +1008,8 @@ mod tests {
     }
 
     #[rstest]
-    fn has_session_returns_true(command_executor: MockCommandExecutor, session_id: SessionId) {
-        let (called_args, command_executor) = command_executor;
-        let muxer = Muxer {
-            command_executor,
-            ..Muxer::new()
-        };
+    fn has_session_returns_true(session_id: SessionId) {
+        let (called_args, muxer) = mock_muxer();
 
         let output = muxer.has_session(&session_id).unwrap();
 
@@ -1055,18 +1020,19 @@ mod tests {
     }
 
     #[rstest]
-    fn has_session_returns_false(command_executor: MockCommandExecutor, session_id: SessionId) {
-        let (called_args, command_executor) = command_executor;
+    fn has_session_returns_false(session_id: SessionId) {
+        let (called_args, muxer) = mock_muxer();
         let muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(args, ["has-session", "-t", "test"]);
-                let output = command_executor(args)?;
+                let output = muxer.execute(args)?;
                 Ok(StdOutput {
                     status: std::process::ExitStatus::from_raw(1),
                     ..output
                 })
-            }),
-            ..Muxer::new()
+            },
         };
 
         let output = muxer.has_session(&session_id).unwrap();
@@ -1077,15 +1043,16 @@ mod tests {
     }
 
     #[rstest]
-    fn has_session_system_error(command_executor: MockCommandExecutor, session_id: SessionId) {
-        let (called_args, command_executor) = command_executor;
+    fn has_session_system_error(session_id: SessionId) {
+        let (called_args, muxer) = mock_muxer();
         let muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(args, ["has-session", "-t", "test"]);
-                command_executor(args)?;
+                muxer.execute(args)?;
                 Err(std::io::Error::other("command failed"))
-            }),
-            ..Muxer::new()
+            },
         };
 
         let output = muxer.has_session(&session_id);
@@ -1096,12 +1063,8 @@ mod tests {
     }
 
     #[rstest]
-    fn new_window_calls_execute(command_executor: MockCommandExecutor, session_id: SessionId) {
-        let (called_args, command_executor) = command_executor;
-        let muxer = Muxer {
-            command_executor,
-            ..Muxer::new()
-        };
+    fn new_window_calls_execute(session_id: SessionId) {
+        let (called_args, muxer) = mock_muxer();
         let directory = "/home/user";
 
         let _ = muxer.new_window(&session_id, directory);
@@ -1111,15 +1074,16 @@ mod tests {
     }
 
     #[rstest]
-    fn new_window_system_error(command_executor: MockCommandExecutor, session_id: SessionId) {
-        let (called_args, command_executor) = command_executor;
+    fn new_window_system_error(session_id: SessionId) {
+        let (called_args, muxer) = mock_muxer();
         let muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(args, ["new-window", "-c", "/home/user", "-t", "test"]);
-                command_executor(args)?;
+                muxer.execute(args)?;
                 Err(std::io::Error::other("command failed"))
-            }),
-            ..Muxer::new()
+            },
         };
         let directory = "/home/user";
 
@@ -1131,12 +1095,8 @@ mod tests {
     }
 
     #[rstest]
-    fn rename_window_calls_execute(command_executor: MockCommandExecutor, window_id: WindowId) {
-        let (called_args, command_executor) = command_executor;
-        let muxer = Muxer {
-            command_executor,
-            ..Muxer::new()
-        };
+    fn rename_window_calls_execute(window_id: WindowId) {
+        let (called_args, muxer) = mock_muxer();
         let window_name = WindowName::new("my-window");
 
         let _ = muxer.rename_window(&window_id, &window_name);
@@ -1146,15 +1106,16 @@ mod tests {
     }
 
     #[rstest]
-    fn rename_window_system_error(command_executor: MockCommandExecutor, window_id: WindowId) {
-        let (called_args, command_executor) = command_executor;
+    fn rename_window_system_error(window_id: WindowId) {
+        let (called_args, muxer) = mock_muxer();
         let muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(args, ["rename-window", "-t", "test:0", "my-window"]);
-                command_executor(args)?;
+                muxer.execute(args)?;
                 Err(std::io::Error::other("command failed"))
-            }),
-            ..Muxer::new()
+            },
         };
         let window_name = WindowName::new("my-window");
 
@@ -1166,12 +1127,8 @@ mod tests {
     }
 
     #[rstest]
-    fn new_pane_calls_execute(command_executor: MockCommandExecutor, window_id: WindowId) {
-        let (called_args, command_executor) = command_executor;
-        let muxer = Muxer {
-            command_executor,
-            ..Muxer::new()
-        };
+    fn new_pane_calls_execute(window_id: WindowId) {
+        let (called_args, muxer) = mock_muxer();
         let directory = "/home/user";
 
         let _ = muxer.new_pane(&window_id, directory);
@@ -1181,15 +1138,16 @@ mod tests {
     }
 
     #[rstest]
-    fn new_pane_system_error(command_executor: MockCommandExecutor, window_id: WindowId) {
-        let (called_args, command_executor) = command_executor;
+    fn new_pane_system_error(window_id: WindowId) {
+        let (called_args, muxer) = mock_muxer();
         let muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(args, ["split-window", "-c", "/home/user", "-t", "test:0"]);
-                command_executor(args)?;
+                muxer.execute(args)?;
                 Err(std::io::Error::other("command failed"))
-            }),
-            ..Muxer::new()
+            },
         };
         let directory = "/home/user";
 
@@ -1201,12 +1159,8 @@ mod tests {
     }
 
     #[rstest]
-    fn select_pane_calls_execute(command_executor: MockCommandExecutor, pane_id: PaneId) {
-        let (called_args, command_executor) = command_executor;
-        let muxer = Muxer {
-            command_executor,
-            ..Muxer::new()
-        };
+    fn select_pane_calls_execute(pane_id: PaneId) {
+        let (called_args, muxer) = mock_muxer();
 
         let _ = muxer.select_pane(&pane_id);
 
@@ -1215,21 +1169,19 @@ mod tests {
     }
 
     #[rstest]
-    fn select_pane_system_error_on_select_window(
-        command_executor: MockCommandExecutor,
-        pane_id: PaneId,
-    ) {
-        let (called_args, command_executor) = command_executor;
+    fn select_pane_system_error_on_select_window(pane_id: PaneId) {
+        let (called_args, muxer) = mock_muxer();
         let muxer = Muxer {
-            command_executor: Box::new(move |args| {
-                let output = command_executor(args)?;
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
+                let output = muxer.execute(args)?;
                 if args == ["select-window", "-t", "test:0"] {
                     Err(std::io::Error::other("command failed"))
                 } else {
                     Ok(output)
                 }
-            }),
-            ..Muxer::new()
+            },
         };
 
         let output = muxer.select_pane(&pane_id);
@@ -1240,21 +1192,19 @@ mod tests {
     }
 
     #[rstest]
-    fn select_pane_system_error_on_select_pane(
-        command_executor: MockCommandExecutor,
-        pane_id: PaneId,
-    ) {
-        let (called_args, command_executor) = command_executor;
+    fn select_pane_system_error_on_select_pane(pane_id: PaneId) {
+        let (called_args, muxer) = mock_muxer();
         let muxer = Muxer {
-            command_executor: Box::new(move |args| {
-                let output = command_executor(args)?;
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
+                let output = muxer.execute(args)?;
                 if args == ["select-pane", "-t", "test:0.0"] {
                     Err(std::io::Error::other("command failed"))
                 } else {
                     Ok(output)
                 }
-            }),
-            ..Muxer::new()
+            },
         };
 
         let output = muxer.select_pane(&pane_id);
@@ -1265,12 +1215,8 @@ mod tests {
     }
 
     #[rstest]
-    fn send_keys_calls_execute(command_executor: MockCommandExecutor, pane_id: PaneId) {
-        let (called_args, command_executor) = command_executor;
-        let muxer = Muxer {
-            command_executor,
-            ..Muxer::new()
-        };
+    fn send_keys_calls_execute(pane_id: PaneId) {
+        let (called_args, muxer) = mock_muxer();
         let keys = Keys::new("ls -la");
 
         let _ = muxer.send_keys(&pane_id, keys);
@@ -1280,15 +1226,16 @@ mod tests {
     }
 
     #[rstest]
-    fn send_keys_system_error(command_executor: MockCommandExecutor, pane_id: PaneId) {
-        let (called_args, command_executor) = command_executor;
+    fn send_keys_system_error(pane_id: PaneId) {
+        let (called_args, muxer) = mock_muxer();
         let muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(args, ["send-keys", "-t", "test:0.0", "ls -la", "C-m"]);
-                command_executor(args)?;
+                muxer.execute(args)?;
                 Err(std::io::Error::other("command failed"))
-            }),
-            ..Muxer::new()
+            },
         };
         let keys = Keys::new("ls -la");
 
@@ -1302,12 +1249,14 @@ mod tests {
     // TODO: add use_layout tests when implemented
 
     #[rstest]
-    fn setup_base_ids_calls_get_index(command_executor: MockCommandExecutor) {
-        let (called_args, command_executor) = command_executor;
+    fn setup_base_ids_calls_get_index() {
+        let (called_args, muxer) = mock_muxer();
         let mut muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(args[..2], ["show-options", "-gv"]);
-                let output = command_executor(args)?;
+                let output = muxer.execute(args)?;
                 match args[2] {
                     "base-index" | "pane-base-index" => Ok(StdOutput {
                         stdout: b"1\n".to_vec(),
@@ -1315,8 +1264,7 @@ mod tests {
                     }),
                     _ => Ok(output),
                 }
-            }),
-            ..Muxer::new()
+            },
         };
 
         let _ = muxer.setup_base_ids();
@@ -1330,15 +1278,16 @@ mod tests {
     }
 
     #[rstest]
-    fn setup_base_ids_system_error(command_executor: MockCommandExecutor) {
-        let (called_args, command_executor) = command_executor;
+    fn setup_base_ids_system_error() {
+        let (called_args, muxer) = mock_muxer();
         let mut muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(args, ["show-options", "-gv", "base-index"]);
-                command_executor(args)?;
+                muxer.execute(args)?;
                 Err(std::io::Error::other("command failed"))
-            }),
-            ..Muxer::new()
+            },
         };
 
         let output = muxer.setup_base_ids();
@@ -1350,18 +1299,19 @@ mod tests {
     }
 
     #[rstest]
-    fn setup_base_ids_parse_error(command_executor: MockCommandExecutor) {
-        let (called_args, command_executor) = command_executor;
+    fn setup_base_ids_parse_error() {
+        let (called_args, muxer) = mock_muxer();
         let mut muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(args, ["show-options", "-gv", "base-index"]);
-                let output = command_executor(args)?;
+                let output = muxer.execute(args)?;
                 Ok(StdOutput {
                     stdout: b"not-a-number\n".to_vec(),
                     ..output
                 })
-            }),
-            ..Muxer::new()
+            },
         };
 
         let output = muxer.setup_base_ids();
@@ -1372,12 +1322,14 @@ mod tests {
     }
 
     #[rstest]
-    fn get_index_returns_value(command_executor: MockCommandExecutor) {
-        let (called_args, command_executor) = command_executor;
+    fn get_index_returns_value() {
+        let (called_args, muxer) = mock_muxer();
         let mut muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(args[..2], ["show-options", "-gv"]);
-                let output = command_executor(args)?;
+                let output = muxer.execute(args)?;
                 match args[2] {
                     "base-index" => Ok(StdOutput {
                         stdout: b"1\n".to_vec(),
@@ -1389,8 +1341,7 @@ mod tests {
                     }),
                     _ => Ok(output),
                 }
-            }),
-            ..Muxer::new()
+            },
         };
 
         let base_index = muxer.get_index("base-index").unwrap();
@@ -1407,12 +1358,14 @@ mod tests {
     }
 
     #[rstest]
-    fn get_index_system_error(command_executor: MockCommandExecutor) {
-        let (called_args, command_executor) = command_executor;
+    fn get_index_system_error() {
+        let (called_args, muxer) = mock_muxer();
         let mut muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(args[..2], ["show-options", "-gv"]);
-                let output = command_executor(args)?;
+                let output = muxer.execute(args)?;
                 match args[2] {
                     "base-index" => Err(std::io::Error::other("command failed")),
                     "pane-base-index" => Ok(StdOutput {
@@ -1421,8 +1374,7 @@ mod tests {
                     }),
                     _ => Ok(output),
                 }
-            }),
-            ..Muxer::new()
+            },
         };
 
         let output = muxer.get_index("base-index");
@@ -1433,12 +1385,14 @@ mod tests {
     }
 
     #[rstest]
-    fn get_index_parse_error(command_executor: MockCommandExecutor) {
-        let (called_args, command_executor) = command_executor;
+    fn get_index_parse_error() {
+        let (called_args, muxer) = mock_muxer();
         let mut muxer = Muxer {
-            command_executor: Box::new(move |args| {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
                 assert_eq!(args[..2], ["show-options", "-gv"]);
-                let output = command_executor(args)?;
+                let output = muxer.execute(args)?;
                 match args[2] {
                     "base-index" => Ok(StdOutput {
                         stdout: b"not-a-number\n".to_vec(),
@@ -1450,8 +1404,7 @@ mod tests {
                     }),
                     _ => Ok(output),
                 }
-            }),
-            ..Muxer::new()
+            },
         };
 
         let output = muxer.get_index("base-index");
