@@ -472,6 +472,30 @@ mod tests {
         (called_args, muxer)
     }
 
+    fn mock_muxer_with_apply_behavior() -> (CalledArgs, Muxer<impl Fn(&[&str]) -> IoResultOutput>) {
+        let (called_args, muxer) = mock_muxer();
+        let muxer = Muxer {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
+                let output = muxer.execute(args)?;
+
+                match args[0] {
+                    "has-session" => Ok(StdOutput {
+                        status: std::process::ExitStatus::from_raw(1),
+                        ..output
+                    }),
+                    "show-options" => Ok(StdOutput {
+                        stdout: b"1\n".to_vec(),
+                        ..output
+                    }),
+                    _ => Ok(output),
+                }
+            },
+        };
+        (called_args, muxer)
+    }
+
     #[fixture]
     fn session() -> Session {
         Session {
@@ -536,26 +560,7 @@ mod tests {
 
     #[rstest]
     fn apply_on_new_session_without_windows(session: Session) {
-        let (called_args, muxer) = mock_muxer();
-        let mut muxer = Muxer {
-            base_window_id: 0,
-            base_pane_id: 0,
-            command_executor: move |args| {
-                let output = muxer.execute(args)?;
-
-                match args[0] {
-                    "has-session" => Ok(StdOutput {
-                        status: std::process::ExitStatus::from_raw(1),
-                        ..output
-                    }),
-                    "show-options" => Ok(StdOutput {
-                        stdout: b"1\n".to_vec(),
-                        ..output
-                    }),
-                    _ => Ok(output),
-                }
-            },
-        };
+        let (called_args, mut muxer) = mock_muxer_with_apply_behavior();
 
         temp_env::with_var("TMUX", Some("test"), || {
             let output = muxer.apply(&session).unwrap();
@@ -585,26 +590,7 @@ mod tests {
             }],
             ..session
         };
-        let (called_args, muxer) = mock_muxer();
-        let mut muxer = Muxer {
-            base_window_id: 0,
-            base_pane_id: 0,
-            command_executor: move |args| {
-                let output = muxer.execute(args)?;
-
-                match args[0] {
-                    "has-session" => Ok(StdOutput {
-                        status: std::process::ExitStatus::from_raw(1),
-                        ..output
-                    }),
-                    "show-options" => Ok(StdOutput {
-                        stdout: b"1\n".to_vec(),
-                        ..output
-                    }),
-                    _ => Ok(output),
-                }
-            },
-        };
+        let (called_args, mut muxer) = mock_muxer_with_apply_behavior();
 
         temp_env::with_var("TMUX", Some("test"), || {
             let output = muxer.apply(&session).unwrap();
@@ -632,26 +618,7 @@ mod tests {
             windows: vec![Default::default(), Default::default()],
             ..session
         };
-        let (called_args, muxer) = mock_muxer();
-        let mut muxer = Muxer {
-            base_window_id: 0,
-            base_pane_id: 0,
-            command_executor: move |args| {
-                let output = muxer.execute(args)?;
-
-                match args[0] {
-                    "has-session" => Ok(StdOutput {
-                        status: std::process::ExitStatus::from_raw(1),
-                        ..output
-                    }),
-                    "show-options" => Ok(StdOutput {
-                        stdout: b"1\n".to_vec(),
-                        ..output
-                    }),
-                    _ => Ok(output),
-                }
-            },
-        };
+        let (called_args, mut muxer) = mock_muxer_with_apply_behavior();
 
         temp_env::with_var("TMUX", Some("test"), || {
             let output = muxer.apply(&session).unwrap();
@@ -682,26 +649,7 @@ mod tests {
             }],
             ..session
         };
-        let (called_args, muxer) = mock_muxer();
-        let mut muxer = Muxer {
-            base_window_id: 0,
-            base_pane_id: 0,
-            command_executor: move |args| {
-                let output = muxer.execute(args)?;
-
-                match args[0] {
-                    "has-session" => Ok(StdOutput {
-                        status: std::process::ExitStatus::from_raw(1),
-                        ..output
-                    }),
-                    "show-options" => Ok(StdOutput {
-                        stdout: b"1\n".to_vec(),
-                        ..output
-                    }),
-                    _ => Ok(output),
-                }
-            },
-        };
+        let (called_args, mut muxer) = mock_muxer_with_apply_behavior();
 
         temp_env::with_var("TMUX", Some("test"), || {
             let output = muxer.apply(&session).unwrap();
@@ -738,26 +686,7 @@ mod tests {
             }],
             ..session
         };
-        let (called_args, muxer) = mock_muxer();
-        let mut muxer = Muxer {
-            base_window_id: 0,
-            base_pane_id: 0,
-            command_executor: move |args| {
-                let output = muxer.execute(args)?;
-
-                match args[0] {
-                    "has-session" => Ok(StdOutput {
-                        status: std::process::ExitStatus::from_raw(1),
-                        ..output
-                    }),
-                    "show-options" => Ok(StdOutput {
-                        stdout: b"1\n".to_vec(),
-                        ..output
-                    }),
-                    _ => Ok(output),
-                }
-            },
-        };
+        let (called_args, mut muxer) = mock_muxer_with_apply_behavior();
 
         temp_env::with_var("TMUX", Some("test"), || {
             let output = muxer.apply(&session).unwrap();
@@ -793,26 +722,7 @@ mod tests {
             }],
             ..session
         };
-        let (called_args, muxer) = mock_muxer();
-        let mut muxer = Muxer {
-            base_window_id: 0,
-            base_pane_id: 0,
-            command_executor: move |args| {
-                let output = muxer.execute(args)?;
-
-                match args[0] {
-                    "has-session" => Ok(StdOutput {
-                        status: std::process::ExitStatus::from_raw(1),
-                        ..output
-                    }),
-                    "show-options" => Ok(StdOutput {
-                        stdout: b"1\n".to_vec(),
-                        ..output
-                    }),
-                    _ => Ok(output),
-                }
-            },
-        };
+        let (called_args, mut muxer) = mock_muxer_with_apply_behavior();
 
         temp_env::with_var("TMUX", Some("test"), || {
             let output = muxer.apply(&session).unwrap();
