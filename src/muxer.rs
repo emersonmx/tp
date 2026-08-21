@@ -266,6 +266,11 @@ where
             }
 
             windows.push((widx, panes));
+
+            if let Some(layout) = &window.layout {
+                let layout = Layout::new(layout);
+                self.use_layout(&window_id, Some(&layout))?;
+            }
         }
 
         if let Some(pane) = focus_pane {
@@ -384,9 +389,17 @@ where
         Ok(())
     }
 
-    fn use_layout(&self, layout: &Layout) -> Result<(), Error> {
-        let _ = layout;
-        todo!()
+    fn use_layout(&self, window_id: &WindowId, layout: Option<&Layout>) -> Result<(), Error> {
+        if let Some(layout) = layout {
+            self.execute(&[
+                "select-layout",
+                "-t",
+                &window_id.to_string(),
+                layout.value(),
+            ])
+            .map_err(system_error)?;
+        }
+        Ok(())
     }
 
     fn setup_base_ids(&mut self) -> Result<(), Error> {
@@ -1156,7 +1169,37 @@ mod tests {
         assert!(matches!(output, Err(Error::System(_))));
     }
 
-    // TODO: add use_layout tests when implemented
+    #[rstest]
+    fn use_layout_calls_execute(window_id: WindowId) {
+        let (called_args, muxer) = mock_muxer();
+        let layout = Layout::new("even-horizontal");
+
+        let _ = muxer.use_layout(&window_id, Some(&layout));
+
+        let expected = "select-layout -t test:0 even-horizontal\n";
+        assert_eq!(*called_args.borrow(), expected.to_string());
+    }
+
+    #[rstest]
+    fn use_layout_system_error(window_id: WindowId) {
+        let (called_args, muxer) = mock_muxer();
+        let muxer = Muxer {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args| {
+                assert_eq!(args, ["select-layout", "-t", "test:0", "INVALID-LAYOUT"]);
+                muxer.execute(args)?;
+                Err(std::io::Error::other("command failed"))
+            },
+        };
+        let layout = Layout::new("INVALID-LAYOUT");
+
+        let output = muxer.use_layout(&window_id, Some(&layout));
+
+        let expected = "select-layout -t test:0 INVALID-LAYOUT\n";
+        assert_eq!(*called_args.borrow(), expected.to_string());
+        assert!(matches!(output, Err(Error::System(_))));
+    }
 
     #[rstest]
     fn setup_base_ids_calls_get_index() {

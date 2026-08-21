@@ -53,6 +53,8 @@ pub struct Window {
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub directory: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout: Option<String>,
     #[serde(default = "default_panes")]
     pub panes: Vec<Pane>,
 }
@@ -61,6 +63,7 @@ fn default_windows() -> Vec<Window> {
     vec![Window {
         name: None,
         directory: None,
+        layout: None,
         panes: default_panes(),
     }]
 }
