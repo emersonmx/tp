@@ -27,3 +27,6 @@ target/
 /tarpaulin-report.*
 /lcov.info
 /cobertura.xml
+
+# Claude Code worktrees
+.claude/worktrees/

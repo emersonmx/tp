@@ -18,6 +18,10 @@ impl Display for Id {
     }
 }
 
+fn exact_target(id: &Id) -> String {
+    format!("={}", id)
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SessionId(Id);
 
@@ -28,6 +32,12 @@ impl SessionId {
 
     pub fn id(&self) -> &Id {
         &self.0
+    }
+
+    /// Target string that makes tmux match the session name exactly instead
+    /// of falling back to prefix or pattern matching.
+    pub fn target(&self) -> String {
+        exact_target(self.id())
     }
 }
 
@@ -52,6 +62,10 @@ impl WindowId {
 
     pub fn id(&self) -> &Id {
         &self.1
+    }
+
+    pub fn target(&self) -> String {
+        exact_target(self.id())
     }
 }
 
@@ -78,8 +92,16 @@ impl PaneId {
         self.0.id()
     }
 
+    pub fn window(&self) -> &WindowId {
+        &self.0
+    }
+
     pub fn id(&self) -> &Id {
         &self.1
+    }
+
+    pub fn target(&self) -> String {
+        exact_target(self.id())
     }
 }
 
@@ -331,21 +353,21 @@ where
     }
 
     fn switch_to_session(&self, session_id: &SessionId) -> Result<(), Error> {
-        self.execute(&["switch-client", "-t", &session_id.to_string()])
+        self.execute(&["switch-client", "-t", &session_id.target()])
             .map_err(system_error)?;
         Ok(())
     }
 
     fn has_session(&self, session_id: &SessionId) -> Result<bool, Error> {
         let output = self
-            .execute(&["has-session", "-t", &session_id.to_string()])
+            .execute(&["has-session", "-t", &session_id.target()])
             .map_err(system_error)?;
 
         Ok(output.status.success())
     }
 
     fn new_window(&self, session_id: &SessionId, directory: &str) -> Result<(), Error> {
-        self.execute(&["new-window", "-c", directory, "-t", &session_id.to_string()])
+        self.execute(&["new-window", "-c", directory, "-t", &session_id.target()])
             .map_err(system_error)?;
         Ok(())
     }
@@ -354,7 +376,7 @@ where
         self.execute(&[
             "rename-window",
             "-t",
-            &window_id.to_string(),
+            &window_id.target(),
             window_name.value(),
         ])
         .map_err(system_error)?;
@@ -362,42 +384,30 @@ where
     }
 
     fn new_pane(&self, window_id: &WindowId, directory: &str) -> Result<(), Error> {
-        self.execute(&[
-            "split-window",
-            "-c",
-            directory,
-            "-t",
-            &window_id.to_string(),
-        ])
-        .map_err(system_error)?;
+        self.execute(&["split-window", "-c", directory, "-t", &window_id.target()])
+            .map_err(system_error)?;
         Ok(())
     }
 
     fn select_pane(&self, pane_id: &PaneId) -> Result<(), Error> {
-        let window_id = pane_id.window_id();
-        self.execute(&["select-window", "-t", &window_id.to_string()])
+        self.execute(&["select-window", "-t", &pane_id.window().target()])
             .map_err(system_error)?;
 
-        self.execute(&["select-pane", "-t", &pane_id.to_string()])
+        self.execute(&["select-pane", "-t", &pane_id.target()])
             .map_err(system_error)?;
         Ok(())
     }
 
     fn send_keys(&self, pane_id: &PaneId, keys: Keys) -> Result<(), Error> {
-        self.execute(&["send-keys", "-t", &pane_id.to_string(), keys.value(), "C-m"])
+        self.execute(&["send-keys", "-t", &pane_id.target(), keys.value(), "C-m"])
             .map_err(system_error)?;
         Ok(())
     }
 
     fn use_layout(&self, window_id: &WindowId, layout: Option<&Layout>) -> Result<(), Error> {
         if let Some(layout) = layout {
-            self.execute(&[
-                "select-layout",
-                "-t",
-                &window_id.to_string(),
-                layout.value(),
-            ])
-            .map_err(system_error)?;
+            self.execute(&["select-layout", "-t", &window_id.target(), layout.value()])
+                .map_err(system_error)?;
         }
         Ok(())
     }
@@ -567,7 +577,51 @@ mod tests {
             assert!(output.windows.is_empty());
         });
 
-        let expected = ["has-session -t test", "switch-client -t test\n"].join("\n");
+        let expected = ["has-session -t =test", "switch-client -t =test\n"].join("\n");
+        assert_eq!(*called_args.borrow(), expected.to_string());
+    }
+
+    #[rstest]
+    fn apply_does_not_match_session_by_prefix(session: Session) {
+        // Emulates tmux target resolution with only a `test-scripts` session:
+        // a plain target also matches by prefix, `=` forces an exact match.
+        let (called_args, mock) = mock_muxer_with_apply_behavior();
+        let mut muxer = Muxer {
+            base_window_id: 0,
+            base_pane_id: 0,
+            command_executor: move |args: &[&str]| {
+                let output = mock.execute(args)?;
+                if args[0] != "has-session" {
+                    return Ok(output);
+                }
+                let existing = "test-scripts";
+                let found = match args[2].strip_prefix('=') {
+                    Some(name) => name == existing,
+                    None => existing.starts_with(args[2]),
+                };
+                let code = if found { 0 } else { 1 };
+                Ok(StdOutput {
+                    status: std::process::ExitStatus::from_raw(code),
+                    ..output
+                })
+            },
+        };
+
+        temp_env::with_var("TMUX", Some("test"), || {
+            let output = muxer.apply(&session).unwrap();
+
+            assert_eq!(output.session_name, "test");
+            assert!(output.is_new_session);
+        });
+
+        let expected = [
+            "has-session -t =test",
+            "show-options -gv base-index",
+            "show-options -gv pane-base-index",
+            "new-session -d -c . -s test",
+            "switch-client -t =test\n",
+        ]
+        .join("\n");
         assert_eq!(*called_args.borrow(), expected.to_string());
     }
 
@@ -584,11 +638,11 @@ mod tests {
         });
 
         let expected = [
-            "has-session -t test",
+            "has-session -t =test",
             "show-options -gv base-index",
             "show-options -gv pane-base-index",
             "new-session -d -c . -s test",
-            "switch-client -t test\n",
+            "switch-client -t =test\n",
         ]
         .join("\n");
         assert_eq!(*called_args.borrow(), expected.to_string());
@@ -614,12 +668,12 @@ mod tests {
         });
 
         let expected = [
-            "has-session -t test",
+            "has-session -t =test",
             "show-options -gv base-index",
             "show-options -gv pane-base-index",
             "new-session -d -c . -s test",
-            "split-window -c . -t test:1",
-            "switch-client -t test\n",
+            "split-window -c . -t =test:1",
+            "switch-client -t =test\n",
         ]
         .join("\n");
         assert_eq!(*called_args.borrow(), expected.to_string());
@@ -642,12 +696,12 @@ mod tests {
         });
 
         let expected = [
-            "has-session -t test",
+            "has-session -t =test",
             "show-options -gv base-index",
             "show-options -gv pane-base-index",
             "new-session -d -c . -s test",
-            "new-window -c . -t test",
-            "switch-client -t test\n",
+            "new-window -c . -t =test",
+            "switch-client -t =test\n",
         ]
         .join("\n");
         assert_eq!(*called_args.borrow(), expected.to_string());
@@ -673,12 +727,12 @@ mod tests {
         });
 
         let expected = [
-            "has-session -t test",
+            "has-session -t =test",
             "show-options -gv base-index",
             "show-options -gv pane-base-index",
             "new-session -d -c . -s test",
-            "rename-window -t test:1 window1",
-            "switch-client -t test\n",
+            "rename-window -t =test:1 window1",
+            "switch-client -t =test\n",
         ]
         .join("\n");
         assert_eq!(*called_args.borrow(), expected.to_string());
@@ -710,14 +764,14 @@ mod tests {
         });
 
         let expected = [
-            "has-session -t test",
+            "has-session -t =test",
             "show-options -gv base-index",
             "show-options -gv pane-base-index",
             "new-session -d -c . -s test",
-            "split-window -c . -t test:1",
-            "select-window -t test:1",
-            "select-pane -t test:1.1",
-            "switch-client -t test\n",
+            "split-window -c . -t =test:1",
+            "select-window -t =test:1",
+            "select-pane -t =test:1.1",
+            "switch-client -t =test\n",
         ]
         .join("\n");
         assert_eq!(*called_args.borrow(), expected.to_string());
@@ -746,12 +800,12 @@ mod tests {
         });
 
         let expected = [
-            "has-session -t test",
+            "has-session -t =test",
             "show-options -gv base-index",
             "show-options -gv pane-base-index",
             "new-session -d -c . -s test",
-            "send-keys -t test:1.1 echo hello C-m",
-            "switch-client -t test\n",
+            "send-keys -t =test:1.1 echo hello C-m",
+            "switch-client -t =test\n",
         ]
         .join("\n");
         assert_eq!(*called_args.borrow(), expected.to_string());
@@ -906,7 +960,7 @@ mod tests {
 
         let _ = muxer.switch_to_session(&session_id);
 
-        let expected = "switch-client -t test\n";
+        let expected = "switch-client -t =test\n";
         assert_eq!(*called_args.borrow(), expected.to_string());
     }
 
@@ -917,7 +971,7 @@ mod tests {
             base_window_id: 0,
             base_pane_id: 0,
             command_executor: move |args| {
-                assert_eq!(args, ["switch-client", "-t", "test"]);
+                assert_eq!(args, ["switch-client", "-t", "=test"]);
                 muxer.execute(args)?;
                 Err(std::io::Error::other("command failed"))
             },
@@ -925,7 +979,7 @@ mod tests {
 
         let output = muxer.switch_to_session(&session_id);
 
-        let expected = "switch-client -t test\n";
+        let expected = "switch-client -t =test\n";
         assert_eq!(*called_args.borrow(), expected.to_string());
         assert!(matches!(output, Err(Error::System(_))));
     }
@@ -938,7 +992,7 @@ mod tests {
 
         assert!(output);
 
-        let expected = "has-session -t test\n";
+        let expected = "has-session -t =test\n";
         assert_eq!(*called_args.borrow(), expected.to_string());
     }
 
@@ -949,7 +1003,7 @@ mod tests {
             base_window_id: 0,
             base_pane_id: 0,
             command_executor: move |args| {
-                assert_eq!(args, ["has-session", "-t", "test"]);
+                assert_eq!(args, ["has-session", "-t", "=test"]);
                 let output = muxer.execute(args)?;
                 Ok(StdOutput {
                     status: std::process::ExitStatus::from_raw(1),
@@ -960,7 +1014,7 @@ mod tests {
 
         let output = muxer.has_session(&session_id).unwrap();
 
-        let expected = "has-session -t test\n";
+        let expected = "has-session -t =test\n";
         assert_eq!(*called_args.borrow(), expected.to_string());
         assert!(!output);
     }
@@ -972,7 +1026,7 @@ mod tests {
             base_window_id: 0,
             base_pane_id: 0,
             command_executor: move |args| {
-                assert_eq!(args, ["has-session", "-t", "test"]);
+                assert_eq!(args, ["has-session", "-t", "=test"]);
                 muxer.execute(args)?;
                 Err(std::io::Error::other("command failed"))
             },
@@ -980,7 +1034,7 @@ mod tests {
 
         let output = muxer.has_session(&session_id);
 
-        let expected = "has-session -t test\n";
+        let expected = "has-session -t =test\n";
         assert_eq!(*called_args.borrow(), expected.to_string());
         assert!(matches!(output, Err(Error::System(_))));
     }
@@ -992,7 +1046,7 @@ mod tests {
 
         let _ = muxer.new_window(&session_id, directory);
 
-        let expected = "new-window -c /home/user -t test\n";
+        let expected = "new-window -c /home/user -t =test\n";
         assert_eq!(*called_args.borrow(), expected.to_string());
     }
 
@@ -1003,7 +1057,7 @@ mod tests {
             base_window_id: 0,
             base_pane_id: 0,
             command_executor: move |args| {
-                assert_eq!(args, ["new-window", "-c", "/home/user", "-t", "test"]);
+                assert_eq!(args, ["new-window", "-c", "/home/user", "-t", "=test"]);
                 muxer.execute(args)?;
                 Err(std::io::Error::other("command failed"))
             },
@@ -1012,7 +1066,7 @@ mod tests {
 
         let output = muxer.new_window(&session_id, directory);
 
-        let expected = "new-window -c /home/user -t test\n";
+        let expected = "new-window -c /home/user -t =test\n";
         assert_eq!(*called_args.borrow(), expected.to_string());
         assert!(matches!(output, Err(Error::System(_))));
     }
@@ -1024,7 +1078,7 @@ mod tests {
 
         let _ = muxer.rename_window(&window_id, &window_name);
 
-        let expected = "rename-window -t test:0 my-window\n";
+        let expected = "rename-window -t =test:0 my-window\n";
         assert_eq!(*called_args.borrow(), expected.to_string());
     }
 
@@ -1035,7 +1089,7 @@ mod tests {
             base_window_id: 0,
             base_pane_id: 0,
             command_executor: move |args| {
-                assert_eq!(args, ["rename-window", "-t", "test:0", "my-window"]);
+                assert_eq!(args, ["rename-window", "-t", "=test:0", "my-window"]);
                 muxer.execute(args)?;
                 Err(std::io::Error::other("command failed"))
             },
@@ -1044,7 +1098,7 @@ mod tests {
 
         let output = muxer.rename_window(&window_id, &window_name);
 
-        let expected = "rename-window -t test:0 my-window\n";
+        let expected = "rename-window -t =test:0 my-window\n";
         assert_eq!(*called_args.borrow(), expected.to_string());
         assert!(matches!(output, Err(Error::System(_))));
     }
@@ -1056,7 +1110,7 @@ mod tests {
 
         let _ = muxer.new_pane(&window_id, directory);
 
-        let expected = "split-window -c /home/user -t test:0\n";
+        let expected = "split-window -c /home/user -t =test:0\n";
         assert_eq!(*called_args.borrow(), expected.to_string());
     }
 
@@ -1067,7 +1121,7 @@ mod tests {
             base_window_id: 0,
             base_pane_id: 0,
             command_executor: move |args| {
-                assert_eq!(args, ["split-window", "-c", "/home/user", "-t", "test:0"]);
+                assert_eq!(args, ["split-window", "-c", "/home/user", "-t", "=test:0"]);
                 muxer.execute(args)?;
                 Err(std::io::Error::other("command failed"))
             },
@@ -1076,7 +1130,7 @@ mod tests {
 
         let output = muxer.new_pane(&window_id, directory);
 
-        let expected = "split-window -c /home/user -t test:0\n";
+        let expected = "split-window -c /home/user -t =test:0\n";
         assert_eq!(*called_args.borrow(), expected.to_string());
         assert!(matches!(output, Err(Error::System(_))));
     }
@@ -1087,7 +1141,7 @@ mod tests {
 
         let _ = muxer.select_pane(&pane_id);
 
-        let expected = ["select-window -t test:0", "select-pane -t test:0.0\n"].join("\n");
+        let expected = ["select-window -t =test:0", "select-pane -t =test:0.0\n"].join("\n");
         assert_eq!(*called_args.borrow(), expected.to_string());
     }
 
@@ -1099,7 +1153,7 @@ mod tests {
             base_pane_id: 0,
             command_executor: move |args| {
                 let output = muxer.execute(args)?;
-                if args == ["select-window", "-t", "test:0"] {
+                if args == ["select-window", "-t", "=test:0"] {
                     Err(std::io::Error::other("command failed"))
                 } else {
                     Ok(output)
@@ -1109,7 +1163,7 @@ mod tests {
 
         let output = muxer.select_pane(&pane_id);
 
-        let expected = "select-window -t test:0\n";
+        let expected = "select-window -t =test:0\n";
         assert_eq!(*called_args.borrow(), expected.to_string());
         assert!(matches!(output, Err(Error::System(_))));
     }
@@ -1122,7 +1176,7 @@ mod tests {
             base_pane_id: 0,
             command_executor: move |args| {
                 let output = muxer.execute(args)?;
-                if args == ["select-pane", "-t", "test:0.0"] {
+                if args == ["select-pane", "-t", "=test:0.0"] {
                     Err(std::io::Error::other("command failed"))
                 } else {
                     Ok(output)
@@ -1132,7 +1186,7 @@ mod tests {
 
         let output = muxer.select_pane(&pane_id);
 
-        let expected = ["select-window -t test:0", "select-pane -t test:0.0\n"].join("\n");
+        let expected = ["select-window -t =test:0", "select-pane -t =test:0.0\n"].join("\n");
         assert_eq!(*called_args.borrow(), expected.to_string());
         assert!(matches!(output, Err(Error::System(_))));
     }
@@ -1144,7 +1198,7 @@ mod tests {
 
         let _ = muxer.send_keys(&pane_id, keys);
 
-        let expected = "send-keys -t test:0.0 ls -la C-m\n";
+        let expected = "send-keys -t =test:0.0 ls -la C-m\n";
         assert_eq!(*called_args.borrow(), expected.to_string());
     }
 
@@ -1155,7 +1209,7 @@ mod tests {
             base_window_id: 0,
             base_pane_id: 0,
             command_executor: move |args| {
-                assert_eq!(args, ["send-keys", "-t", "test:0.0", "ls -la", "C-m"]);
+                assert_eq!(args, ["send-keys", "-t", "=test:0.0", "ls -la", "C-m"]);
                 muxer.execute(args)?;
                 Err(std::io::Error::other("command failed"))
             },
@@ -1164,7 +1218,7 @@ mod tests {
 
         let output = muxer.send_keys(&pane_id, keys);
 
-        let expected = "send-keys -t test:0.0 ls -la C-m\n";
+        let expected = "send-keys -t =test:0.0 ls -la C-m\n";
         assert_eq!(*called_args.borrow(), expected.to_string());
         assert!(matches!(output, Err(Error::System(_))));
     }
@@ -1176,7 +1230,7 @@ mod tests {
 
         let _ = muxer.use_layout(&window_id, Some(&layout));
 
-        let expected = "select-layout -t test:0 even-horizontal\n";
+        let expected = "select-layout -t =test:0 even-horizontal\n";
         assert_eq!(*called_args.borrow(), expected.to_string());
     }
 
@@ -1187,7 +1241,7 @@ mod tests {
             base_window_id: 0,
             base_pane_id: 0,
             command_executor: move |args| {
-                assert_eq!(args, ["select-layout", "-t", "test:0", "INVALID-LAYOUT"]);
+                assert_eq!(args, ["select-layout", "-t", "=test:0", "INVALID-LAYOUT"]);
                 muxer.execute(args)?;
                 Err(std::io::Error::other("command failed"))
             },
@@ -1196,7 +1250,7 @@ mod tests {
 
         let output = muxer.use_layout(&window_id, Some(&layout));
 
-        let expected = "select-layout -t test:0 INVALID-LAYOUT\n";
+        let expected = "select-layout -t =test:0 INVALID-LAYOUT\n";
         assert_eq!(*called_args.borrow(), expected.to_string());
         assert!(matches!(output, Err(Error::System(_))));
     }
