@@ -183,7 +183,7 @@ _tp() {
             return 0
             ;;
         tp__subcmd__load)
-            opts="-h --help <SESSION>"
+            opts="-h --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -197,7 +197,7 @@ _tp() {
             return 0
             ;;
         tp__subcmd__new)
-            opts="-h --help <SESSION_NAME>"
+            opts="-h --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
